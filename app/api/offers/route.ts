@@ -141,7 +141,8 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     let whereClause = 'WHERE user_id = $1';
-    const params = [userId];
+    const params: any[] = [userId];
+
 
     if (status) {
       whereClause += ' AND status = $2';
