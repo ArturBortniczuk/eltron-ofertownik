@@ -51,7 +51,7 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
-  }
+    );
   }
 
   const formatCurrency = (amount: number) => {
@@ -278,3 +278,4 @@ export default function DashboardPage() {
       )}
     </div>
   );
+}
