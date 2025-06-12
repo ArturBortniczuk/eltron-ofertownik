@@ -408,4 +408,173 @@ export default function NewOfferPage() {
                     <option value="23">23%</option>
                     <option value="8">8%</option>
                     <option value="5">5%</option>
-                    <option value="0">0%</option
+                    <option value="0">0%</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    className="btn-primary w-full"
+                  >
+                    Dodaj
+                  </button>
+                </div>
+              </div>
+
+              {/* Podgląd kwot aktualnej pozycji */}
+              {currentItem.product_name && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-2">Podgląd pozycji:</div>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Netto:</span>
+                      <span className="font-medium ml-2">{currentItem.net_amount.toFixed(2)} zł</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">VAT:</span>
+                      <span className="font-medium ml-2">{currentItem.vat_amount.toFixed(2)} zł</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Brutto:</span>
+                      <span className="font-medium ml-2">{currentItem.gross_amount.toFixed(2)} zł</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Lista dodanych pozycji */}
+          {items.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Pozycje w ofercie</h2>
+              <div className="space-y-3">
+                {items.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{item.product_name}</div>
+                      <div className="text-sm text-gray-600">
+                        {item.quantity} {item.unit} × {item.unit_price.toFixed(2)} zł 
+                        = {item.gross_amount.toFixed(2)} zł brutto
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeItem(index)}
+                      className="text-red-600 hover:text-red-800 text-sm font-medium ml-4"
+                    >
+                      Usuń
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Dodatkowe koszty */}
+          <div className="card">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Dodatkowe koszty</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Kwota netto (zł)
+                </label>
+                <input
+                  type="number"
+                  value={additionalCosts}
+                  onChange={(e) => setAdditionalCosts(parseFloat(e.target.value) || 0)}
+                  className="input-field"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Opis
+                </label>
+                <input
+                  type="text"
+                  value={additionalCostsDescription}
+                  onChange={(e) => setAdditionalCostsDescription(e.target.value)}
+                  className="input-field"
+                  placeholder="np. Transport, montaż"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Uwagi */}
+          <div className="card">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Uwagi</h2>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="input-field"
+              rows={4}
+              placeholder="Dodatkowe informacje dla klienta..."
+            />
+          </div>
+        </div>
+
+        {/* Sidebar z podsumowaniem */}
+        <div className="lg:col-span-1">
+          <div className="card sticky top-4">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Podsumowanie</h2>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Pozycje:</span>
+                <span className="font-medium">{items.length}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-600">Wartość netto:</span>
+                <span className="font-medium">{totals.net.toFixed(2)} zł</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-600">VAT:</span>
+                <span className="font-medium">{totals.vat.toFixed(2)} zł</span>
+              </div>
+              
+              <div className="flex justify-between border-t border-gray-200 pt-3">
+                <span className="text-lg font-semibold">RAZEM:</span>
+                <span className="text-lg font-bold text-eltron-primary">
+                  {totals.gross.toFixed(2)} zł
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => saveOffer('draft')}
+                disabled={saving}
+                className="w-full btn-secondary disabled:opacity-50"
+              >
+                {saving ? 'Zapisywanie...' : '💾 Zapisz jako szkic'}
+              </button>
+              
+              <button
+                onClick={() => saveOffer('sent')}
+                disabled={saving}
+                className="w-full btn-primary disabled:opacity-50"
+              >
+                {saving ? 'Zapisywanie...' : '📤 Zapisz i wyślij'}
+              </button>
+            </div>
+
+            {clientName && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="text-sm text-gray-600 mb-2">Klient:</div>
+                <div className="font-medium">{clientName}</div>
+                {clientEmail && (
+                  <div className="text-sm text-gray-600">{clientEmail}</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
