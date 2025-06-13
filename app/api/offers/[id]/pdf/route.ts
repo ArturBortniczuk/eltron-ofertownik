@@ -70,22 +70,19 @@ export async function GET(
     doc.rect(0, 0, doc.page.width, 120)
        .fill('#3B4A5C');
 
-    // Logo/Nazwa firmy (biały tekst)
+    // Logo/Nazwa firmy (biały tekst) - używamy domyślnego fontu
     doc.fill('#FFFFFF')
        .fontSize(24)
-       .font('Helvetica-Bold')
        .text('GRUPA ELTRON', 40, 40);
 
     // Adres firmy
     doc.fontSize(10)
-       .font('Helvetica')
        .text('ul. Przykładowa 123, 00-000 Warszawa', 40, 70)
        .text('Tel: +48 123 456 789 | Email: kontakt@eltron.pl', 40, 85);
 
     // Tytuł oferty (po prawej)
     const offerTitle = `OFERTA Nr ${offer.id}/${new Date().getFullYear()}`;
     doc.fontSize(18)
-       .font('Helvetica-Bold')
        .text(offerTitle, doc.page.width - 200, 40, { align: 'right', width: 160 });
 
     // Data oferty
@@ -94,7 +91,6 @@ export async function GET(
     const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
     
     doc.fontSize(10)
-       .font('Helvetica')
        .text(`Data: ${offerDate}`, doc.page.width - 200, 70, { align: 'right', width: 160 })
        .text(`Ważna do: ${validUntil}`, doc.page.width - 200, 85, { align: 'right', width: 160 });
 
@@ -109,17 +105,14 @@ export async function GET(
     // Nagłówek "DLA:"
     doc.fill('#3B4A5C')
        .fontSize(12)
-       .font('Helvetica-Bold')
        .text('DLA:', 50, yPos + 15);
 
     // Dane klienta
     doc.fill('#000000')
        .fontSize(14)
-       .font('Helvetica-Bold')
        .text(offer.client_name || '', 50, yPos + 35);
 
-    doc.fontSize(10)
-       .font('Helvetica');
+    doc.fontSize(10);
     
     let clientYPos = yPos + 50;
     
@@ -141,7 +134,6 @@ export async function GET(
     yPos = 240;
     doc.fill('#000000')
        .fontSize(11)
-       .font('Helvetica')
        .text('Dzień dobry,', 40, yPos)
        .text('Przesyłam ofertę na zamówione towary zgodnie z Państwa zapytaniem.', 40, yPos + 20);
 
@@ -160,8 +152,7 @@ export async function GET(
 
     // Tekst nagłówka
     doc.fill('#FFFFFF')
-       .fontSize(10)
-       .font('Helvetica-Bold');
+       .fontSize(10);
 
     const headers = ['Lp.', 'Nazwa towaru/usługi', 'Ilość', 'Cena netto', 'VAT', 'Wartość brutto'];
     
@@ -174,8 +165,7 @@ export async function GET(
     // Pozycje tabeli
     yPos = tableTop + 25;
     doc.fill('#000000')
-       .fontSize(9)
-       .font('Helvetica');
+       .fontSize(9);
 
     items.forEach((item, index) => {
       const quantity = parseFloat(item.quantity) || 0;
@@ -260,12 +250,10 @@ export async function GET(
 
     doc.fill('#3B4A5C')
        .fontSize(12)
-       .font('Helvetica-Bold')
        .text('WARUNKI OFERTY:', 50, yPos + 15);
 
     doc.fill('#000000')
-       .fontSize(10)
-       .font('Helvetica');
+       .fontSize(10);
 
     const deliveryDays = parseInt(offer.delivery_days) || 0;
     const conditions = [
@@ -285,8 +273,7 @@ export async function GET(
        .fill('#F8F9FA');
 
     doc.fill('#000000')
-       .fontSize(11)
-       .font('Helvetica');
+       .fontSize(11);
 
     doc.text('Wartość netto:', 330, yPos + 20)
        .text(`${totalNet.toFixed(2)} zł`, 480, yPos + 20, { align: 'right', width: 60 });
@@ -302,7 +289,6 @@ export async function GET(
     // RAZEM
     doc.fill('#3B4A5C')
        .fontSize(12)
-       .font('Helvetica-Bold')
        .text('RAZEM DO ZAPŁATY:', 330, yPos + 65)
        .text(`${totalGross.toFixed(2)} zł`, 480, yPos + 65, { align: 'right', width: 60 });
 
@@ -311,11 +297,9 @@ export async function GET(
       yPos += 140;
       doc.fill('#000000')
          .fontSize(12)
-         .font('Helvetica-Bold')
          .text('UWAGI:', 40, yPos);
 
       doc.fontSize(10)
-         .font('Helvetica')
          .text(offer.notes, 40, yPos + 20, { width: doc.page.width - 80 });
       
       yPos += 60;
@@ -332,7 +316,6 @@ export async function GET(
     yPos += 15;
     doc.fill('#666666')
        .fontSize(10)
-       .font('Helvetica')
        .text('W celu realizacji zamówienia proszę o kontakt:', 40, yPos)
        .text(`Email: ${offer.created_by_email || ''} | Tel: +48 123 456 789`, 40, yPos + 15);
 
@@ -341,7 +324,6 @@ export async function GET(
        .text('Pozdrawiamy,', 40, yPos + 15);
 
     doc.fill('#3B4A5C')
-       .font('Helvetica-Bold')
        .text(`${offer.created_by_name || ''} | GRUPA ELTRON`, 40, yPos + 30);
 
     // Zakończ dokument
