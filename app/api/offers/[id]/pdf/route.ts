@@ -277,7 +277,7 @@ export async function GET(
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
     const deliveryDays = parseInt(offer.delivery_days) || 0;
-    const validDays = parseInt(offer.valid_days) || 30;
+    // validDays już jest zdefiniowane wyżej, więc nie definiujemy ponownie
     
     const conditions = [
       `• Czas dostawy: ${deliveryDays} dni roboczych`,
