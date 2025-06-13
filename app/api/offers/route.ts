@@ -1,3 +1,4 @@
+// app/api/offers/route.ts - ZAKTUALIZOWANA WERSJA
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
@@ -25,13 +26,14 @@ export async function POST(request: NextRequest) {
       // Utwórz ofertę
       const offerResult = await client.query(`
         INSERT INTO offers (
-          user_id, client_name, client_email, client_phone,
+          user_id, client_id, client_name, client_email, client_phone,
           delivery_days, valid_days, additional_costs, additional_costs_description,
           notes, total_net, total_vat, total_gross, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING id
       `, [
         userId,
+        data.client_id || null,
         data.client_name,
         data.client_email || null,
         data.client_phone || null,
@@ -47,6 +49,14 @@ export async function POST(request: NextRequest) {
       ]);
 
       const offerId = offerResult.rows[0].id;
+
+      // Aktualizuj last_used klienta jeśli jest przypisany
+      if (data.client_id) {
+        await client.query(
+          'UPDATE clients SET last_used = CURRENT_TIMESTAMP WHERE id = $1 AND created_by = $2',
+          [data.client_id, userId]
+        );
+      }
 
       // Dodaj pozycje oferty
       for (let i = 0; i < data.items.length; i++) {
@@ -140,31 +150,41 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const status = searchParams.get('status');
+    const clientId = searchParams.get('client_id');
     const offset = (page - 1) * limit;
 
-    let whereClause = 'WHERE user_id = $1';
+    let whereClause = 'WHERE o.user_id = $1';
     const params: any[] = [userId];
 
-
     if (status) {
-      whereClause += ' AND status = $2';
+      whereClause += ' AND o.status = $2';
       params.push(status);
+    }
+
+    if (clientId) {
+      whereClause += ` AND o.client_id = $${params.length + 1}`;
+      params.push(parseInt(clientId));
     }
 
     // Pobierz oferty z paginacją
     const result = await db.query(`
       SELECT 
-        id, client_name, client_email, client_phone,
-        delivery_days, valid_days, total_gross, status, created_at
-      FROM offers
+        o.id, o.client_name, o.client_email, o.client_phone,
+        o.delivery_days, o.valid_days, o.total_gross, o.status, o.created_at,
+        c.name as client_name_from_table
+      FROM offers o
+      LEFT JOIN clients c ON o.client_id = c.id
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY o.created_at DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `, [...params, limit, offset]);
 
     // Pobierz łączną liczbę ofert
     const countResult = await db.query(`
-      SELECT COUNT(*) as count FROM offers ${whereClause}
+      SELECT COUNT(*) as count 
+      FROM offers o
+      LEFT JOIN clients c ON o.client_id = c.id
+      ${whereClause}
     `, params);
 
     const totalCount = parseInt(countResult.rows[0].count);
