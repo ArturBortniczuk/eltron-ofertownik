@@ -53,65 +53,274 @@ export async function GET(
     const totalGross = parseFloat(offer.total_gross) || 0;
     const additionalCosts = parseFloat(offer.additional_costs) || 0;
 
-    // HTML template z polskimi znakami
+    // HTML template z Google Fonts i obsługą polskich znaków
     const html = `
     <!DOCTYPE html>
     <html lang="pl">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <!-- Google Fonts z obsługą polskich znaków -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&subset=latin,latin-ext&display=swap" rel="stylesheet">
+        
         <style>
-            body {
-                font-family: 'Arial', sans-serif;
-                font-size: 12px;
-                line-height: 1.4;
-                color: #000;
+            * {
                 margin: 0;
-                padding: 20px;
+                padding: 0;
+                box-sizing: border-box;
             }
+            
+            body {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                font-size: 12px;
+                line-height: 1.5;
+                color: #000000;
+                background: #ffffff;
+                padding: 20px;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+            
             .header {
                 background: #3B4A5C;
                 color: white;
-                padding: 15px;
-                margin-bottom: 20px;
+                padding: 20px;
+                margin-bottom: 25px;
                 display: flex;
                 justify-content: space-between;
+                align-items: flex-start;
+                border-radius: 8px;
             }
-            .header h1 { font-size: 24px; margin: 0 0 8px 0; }
-            .header p { font-size: 10px; margin: 2px 0; }
-            .header-right { text-align: right; }
-            .header-right h2 { font-size: 18px; margin: 0 0 8px 0; }
+            
+            .header-left h1 {
+                font-size: 28px;
+                font-weight: 700;
+                margin-bottom: 8px;
+                letter-spacing: 0.5px;
+            }
+            
+            .header-left p {
+                font-size: 11px;
+                margin: 2px 0;
+                opacity: 0.9;
+            }
+            
+            .header-right {
+                text-align: right;
+            }
+            
+            .header-right h2 {
+                font-size: 20px;
+                font-weight: 600;
+                margin-bottom: 8px;
+            }
+            
+            .header-right p {
+                font-size: 11px;
+                margin: 2px 0;
+                opacity: 0.9;
+            }
+            
             .client-box {
                 background: #F8F9FA;
-                border: 2px solid #CCCCCC;
-                padding: 15px;
-                margin-bottom: 20px;
+                border: 2px solid #E9ECEF;
+                border-radius: 8px;
+                padding: 20px;
+                margin-bottom: 25px;
             }
-            .client-label { font-weight: bold; color: #3B4A5C; margin-bottom: 8px; }
-            .client-name { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
-            .client-details { font-size: 10px; margin-bottom: 3px; }
-            .greeting { margin-bottom: 20px; line-height: 1.6; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th { background: #3B4A5C; color: white; padding: 10px 5px; text-align: center; font-size: 10px; border: 1px solid #CCC; }
-            td { padding: 8px 5px; border: 1px solid #CCC; text-align: center; font-size: 9px; }
-            tr:nth-child(even) { background: #F8F9FA; }
-            .text-left { text-align: left; }
-            .text-right { text-align: right; }
-            .summary-section { display: flex; justify-content: space-between; margin-top: 30px; gap: 20px; }
-            .box { background: #F8F9FA; border: 2px solid #CCC; padding: 15px; width: 48%; }
-            .box-title { font-weight: bold; color: #3B4A5C; margin-bottom: 10px; }
-            .condition-item { font-size: 10px; margin-bottom: 5px; }
-            .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-            .summary-total { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 2px solid #3B4A5C; font-weight: bold; color: #3B4A5C; }
-            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #CCC; font-size: 10px; color: #666; }
-            .footer-signature { font-weight: bold; color: #3B4A5C; }
+            
+            .client-label {
+                font-weight: 600;
+                color: #3B4A5C;
+                margin-bottom: 10px;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .client-name {
+                font-size: 18px;
+                font-weight: 600;
+                margin-bottom: 10px;
+                color: #212529;
+            }
+            
+            .client-details {
+                font-size: 11px;
+                margin-bottom: 4px;
+                color: #495057;
+            }
+            
+            .greeting {
+                margin-bottom: 25px;
+                line-height: 1.6;
+                font-size: 12px;
+                color: #495057;
+            }
+            
+            .greeting p {
+                margin-bottom: 8px;
+            }
+            
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 25px;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            th {
+                background: #3B4A5C;
+                color: white;
+                padding: 12px 8px;
+                text-align: center;
+                font-size: 11px;
+                font-weight: 600;
+                border: none;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+            }
+            
+            td {
+                padding: 10px 8px;
+                border: 1px solid #DEE2E6;
+                text-align: center;
+                font-size: 10px;
+                background: white;
+            }
+            
+            tr:nth-child(even) td {
+                background: #F8F9FA;
+            }
+            
+            tr:hover td {
+                background: #E9ECEF;
+            }
+            
+            .text-left {
+                text-align: left !important;
+            }
+            
+            .text-right {
+                text-align: right !important;
+            }
+            
+            .summary-section {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 30px;
+                gap: 25px;
+            }
+            
+            .box {
+                background: #F8F9FA;
+                border: 2px solid #E9ECEF;
+                border-radius: 8px;
+                padding: 20px;
+                width: 48%;
+            }
+            
+            .box-title {
+                font-weight: 600;
+                color: #3B4A5C;
+                margin-bottom: 15px;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .condition-item {
+                font-size: 11px;
+                margin-bottom: 8px;
+                color: #495057;
+                padding-left: 5px;
+            }
+            
+            .summary-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 10px;
+                font-size: 12px;
+                color: #495057;
+            }
+            
+            .summary-total {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 15px;
+                padding-top: 15px;
+                border-top: 2px solid #3B4A5C;
+                font-weight: 700;
+                color: #3B4A5C;
+                font-size: 14px;
+            }
+            
+            .notes-section {
+                margin-top: 30px;
+                background: #F8F9FA;
+                border-radius: 8px;
+                padding: 20px;
+                border: 2px solid #E9ECEF;
+            }
+            
+            .notes-title {
+                font-weight: 600;
+                color: #3B4A5C;
+                margin-bottom: 10px;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .notes-content {
+                font-size: 11px;
+                line-height: 1.6;
+                color: #495057;
+                white-space: pre-line;
+            }
+            
+            .footer {
+                margin-top: 40px;
+                padding-top: 25px;
+                border-top: 2px solid #E9ECEF;
+                font-size: 11px;
+                color: #6C757D;
+                line-height: 1.6;
+            }
+            
+            .footer p {
+                margin-bottom: 5px;
+            }
+            
+            .footer-signature {
+                font-weight: 600;
+                color: #3B4A5C;
+                margin-top: 10px;
+            }
+            
+            .additional-costs-row {
+                border-top: 3px solid #3B4A5C !important;
+                background: #E3F2FD !important;
+            }
+            
+            .additional-costs-row td {
+                background: #E3F2FD !important;
+                font-weight: 600;
+            }
         </style>
     </head>
     <body>
         <div class="header">
-            <div>
+            <div class="header-left">
                 <h1>GRUPA ELTRON</h1>
                 <p>ul. Przykładowa 123, 00-000 Warszawa</p>
                 <p>Tel: +48 123 456 789 | Email: kontakt@eltron.pl</p>
+                <p>NIP: 123-456-78-90 | REGON: 123456789</p>
             </div>
             <div class="header-right">
                 <h2>OFERTA Nr ${offer.id}/${new Date().getFullYear()}</h2>
@@ -121,16 +330,16 @@ export async function GET(
         </div>
 
         <div class="client-box">
-            <div class="client-label">DLA:</div>
+            <div class="client-label">Oferta dla:</div>
             <div class="client-name">${offer.client_name || ''}</div>
-            ${offer.client_email ? `<div class="client-details">Email: ${offer.client_email}</div>` : ''}
-            ${offer.client_phone ? `<div class="client-details">Tel: ${offer.client_phone}</div>` : ''}
-            ${offer.client_nip ? `<div class="client-details">NIP: ${offer.client_nip}</div>` : ''}
+            ${offer.client_email ? `<div class="client-details">📧 Email: ${offer.client_email}</div>` : ''}
+            ${offer.client_phone ? `<div class="client-details">📞 Telefon: ${offer.client_phone}</div>` : ''}
+            ${offer.client_nip ? `<div class="client-details">🏢 NIP: ${offer.client_nip}</div>` : ''}
         </div>
 
         <div class="greeting">
-            <p>Dzień dobry,</p>
-            <p>Przesyłam ofertę na zamówione towary zgodnie z Państwa zapytaniem.</p>
+            <p>Szanowni Państwo,</p>
+            <p>W odpowiedzi na Państwa zapytanie przesyłamy ofertę na zamówione towary. Mamy nadzieję, że przedstawione warunki spotkają się z Państwa akceptacją.</p>
         </div>
 
         <table>
@@ -164,7 +373,7 @@ export async function GET(
                 }).join('')}
                 
                 ${additionalCosts > 0 ? `
-                <tr style="border-top: 2px solid #3B4A5C;">
+                <tr class="additional-costs-row">
                     <td></td>
                     <td class="text-left">${offer.additional_costs_description || 'Dodatkowe koszty'}</td>
                     <td>1 usł</td>
@@ -178,20 +387,23 @@ export async function GET(
 
         <div class="summary-section">
             <div class="box">
-                <div class="box-title">WARUNKI OFERTY:</div>
+                <div class="box-title">Warunki oferty:</div>
                 <div class="condition-item">• Czas dostawy: ${deliveryDays} dni roboczych</div>
-                <div class="condition-item">• Ważność: ${validDays} dni</div>
-                <div class="condition-item">• Płatność: przelew 14 dni</div>
-                <div class="condition-item">• Ceny zawierają VAT</div>
+                <div class="condition-item">• Ważność oferty: ${validDays} dni od daty wystawienia</div>
+                <div class="condition-item">• Forma płatności: przelew bankowy</div>
+                <div class="condition-item">• Termin płatności: 14 dni od daty faktury</div>
+                <div class="condition-item">• Ceny zawierają podatek VAT</div>
+                <div class="condition-item">• Dostawa na adres klienta</div>
             </div>
 
             <div class="box">
+                <div class="box-title">Podsumowanie finansowe:</div>
                 <div class="summary-row">
                     <span>Wartość netto:</span>
                     <span>${totalNet.toFixed(2)} zł</span>
                 </div>
                 <div class="summary-row">
-                    <span>VAT:</span>
+                    <span>Podatek VAT:</span>
                     <span>${totalVat.toFixed(2)} zł</span>
                 </div>
                 <div class="summary-total">
@@ -202,48 +414,78 @@ export async function GET(
         </div>
 
         ${offer.notes ? `
-        <div style="margin-top: 30px;">
-            <div class="box-title">UWAGI:</div>
-            <div style="font-size: 10px; margin-top: 5px;">${offer.notes}</div>
+        <div class="notes-section">
+            <div class="notes-title">Dodatkowe uwagi:</div>
+            <div class="notes-content">${offer.notes}</div>
         </div>
         ` : ''}
 
         <div class="footer">
-            <div>
-                <p>W celu realizacji zamówienia proszę o kontakt:</p>
-                <p>Email: ${offer.created_by_email || ''} | Tel: +48 123 456 789</p>
+            <p><strong>Kontakt w sprawie realizacji zamówienia:</strong></p>
+            <p>📧 Email: ${offer.created_by_email || 'kontakt@eltron.pl'}</p>
+            <p>📞 Telefon: +48 123 456 789</p>
+            <p>🌐 www.eltron.pl</p>
+            
+            <div style="margin-top: 20px;">
+                <p>Dziękujemy za zainteresowanie naszą ofertą i liczymy na owocną współpracę.</p>
+                <p>W przypadku pytań jesteśmy do Państwa dyspozycji.</p>
             </div>
-            <div style="margin-top: 15px;">
-                <p>Dziękujemy za zainteresowanie naszą ofertą.</p>
-                <p>Pozdrawiamy,</p>
-                <p class="footer-signature">${offer.created_by_name || ''} | GRUPA ELTRON</p>
+            
+            <div class="footer-signature">
+                <p>Z poważaniem,</p>
+                <p>${offer.created_by_name || 'Zespół GRUPA ELTRON'}</p>
+                <p>GRUPA ELTRON Sp. z o.o.</p>
             </div>
         </div>
     </body>
     </html>
     `;
 
-    // Uruchom Playwright i wygeneruj PDF
+    // Uruchom Playwright z dodatkowymi opcjami dla fontów
     const browser = await chromium.launch({
-      headless: true
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
     });
     
     const page = await browser.newPage();
-    await page.setContent(html);
+    
+    // Ustaw dodatkowe opcje dla lepszego renderowania fontów
+    await page.setViewportSize({ width: 1200, height: 1600 });
+    await page.setContent(html, { waitUntil: 'networkidle' });
+    
+    // Poczekaj na załadowanie fontów
+    await page.waitForTimeout(1000);
     
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+      margin: { 
+        top: '15mm', 
+        right: '15mm', 
+        bottom: '15mm', 
+        left: '15mm' 
+      },
+      preferCSSPageSize: true
     });
     
     await browser.close();
 
-    // Zwróć PDF z polskimi znakami
+    // Zwróć PDF z prawidłową nazwą pliku
+    const clientName = String(offer.client_name || 'Klient').replace(/[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s]/g, '').replace(/\s+/g, '_');
+    const fileName = `Oferta_${offer.id}_${clientName}.pdf`;
+
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Oferta_${offer.id}_${String(offer.client_name || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`
+        'Content-Disposition': `attachment; filename="${fileName}"`
       }
     });
 
