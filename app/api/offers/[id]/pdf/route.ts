@@ -236,12 +236,12 @@ export async function GET(
         cellPadding: 3
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 10 },      // Lp. - mniejsze
-        1: { cellWidth: 85, halign: 'left' },        // Nazwa - zmniejszone
-        2: { halign: 'center', cellWidth: 18 },      // Ilość - mniejsze
-        3: { halign: 'right', cellWidth: 24 },       // Cena netto - mniejsze
-        4: { halign: 'center', cellWidth: 12 },      // VAT - mniejsze
-        5: { halign: 'right', cellWidth: 26 }        // Wartość brutto - mniejsze
+        0: { halign: 'center', cellWidth: 10 },
+        1: { cellWidth: 85, halign: 'left' },
+        2: { halign: 'center', cellWidth: 18 },
+        3: { halign: 'right', cellWidth: 24 },
+        4: { halign: 'center', cellWidth: 12 },
+        5: { halign: 'right', cellWidth: 26 }
       },
       alternateRowStyles: {
         fillColor: [248, 249, 250]
@@ -251,7 +251,7 @@ export async function GET(
         lineWidth: 0.3,
         fontSize: 9
       },
-      tableWidth: 175,  // Stała szerokość - dopasowana do marginesów
+      tableWidth: 175,
       margin: { left: 15, right: 15 }
     });
 
@@ -352,31 +352,6 @@ export async function GET(
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(59, 74, 92);
     addPolishText(doc, `${offer.created_by_name || ''} | GRUPA ELTRON`, 15, yPos + 12);
-
-    // Generuj PDF jako buffer
-    const pdfBuffer = doc.output('arraybuffer');
-
-    // Zwróć PDF
-    return new NextResponse(pdfBuffer, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Oferta_${offer.id}_${String(offer.client_name || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`
-      }
-    });
-
-  } catch (error) {
-    console.error('💥 PDF generation error:', error);
-    console.error('💥 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    return NextResponse.json(
-      { error: 'Błąd generowania PDF: ' + (error instanceof Error ? error.message : 'Nieznany błąd') },
-      { status: 500 }
-    );
-  }
-}Pos + 6);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(59, 74, 92);
-    doc.text(`${offer.created_by_name || ''} | GRUPA ELTRON`, 15, yPos + 12);
 
     // Generuj PDF jako buffer
     const pdfBuffer = doc.output('arraybuffer');
