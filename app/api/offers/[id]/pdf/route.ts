@@ -46,7 +46,7 @@ export async function GET(
     `, [offerId]);
     const items = itemsResult.rows;
 
-    // Stwórz nowy dokument PDF z UTF-8
+    // Stwórz nowy dokument PDF
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -54,60 +54,29 @@ export async function GET(
     });
     
     const pageWidth = doc.internal.pageSize.width;
-    
-    // KRYTYCZNE: Ustaw kodowanie UTF-8
-    (doc as any).setCharSpace = function(space: number) {
-      this.internal.write('BT');
-      this.internal.write(space + ' Tc');
-      this.internal.write('ET');
-    };
 
-    // Funkcja do bezpiecznego dodawania tekstu z polskimi znakami
-    function addText(text: string, x: number, y: number, options: any = {}) {
-      if (!text) text = '';
-      
-      try {
-        // Konwertuj do UTF-8 przez encoder
-        const utf8Text = decodeURIComponent(encodeURIComponent(String(text)));
-        doc.text(utf8Text, x, y, options);
-      } catch (error) {
-        // Fallback - użyj podstawowej konwersji
-        const simpleConversion = String(text)
-          .replace(/ą/g, 'a').replace(/Ą/g, 'A')
-          .replace(/ć/g, 'c').replace(/Ć/g, 'C')
-          .replace(/ę/g, 'e').replace(/Ę/g, 'E')
-          .replace(/ł/g, 'l').replace(/Ł/g, 'L')
-          .replace(/ń/g, 'n').replace(/Ń/g, 'N')
-          .replace(/ó/g, 'o').replace(/Ó/g, 'O')
-          .replace(/ś/g, 's').replace(/Ś/g, 'S')
-          .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
-          .replace(/ż/g, 'z').replace(/Ż/g, 'Z');
-        
-        doc.text(simpleConversion, x, y, options);
-      }
-    }
-
-    // Funkcja do konwersji tekstu dla tabel
-    function convertText(text: string): string {
+    // Funkcja do konwersji polskich znaków - PRZENIESIONA NA GÓRĘ
+    const convertText = (text: string): string => {
       if (!text) return '';
       
-      try {
-        // Spróbuj zachować UTF-8
-        return decodeURIComponent(encodeURIComponent(String(text)));
-      } catch (error) {
-        // Fallback
-        return String(text)
-          .replace(/ą/g, 'a').replace(/Ą/g, 'A')
-          .replace(/ć/g, 'c').replace(/Ć/g, 'C')
-          .replace(/ę/g, 'e').replace(/Ę/g, 'E')
-          .replace(/ł/g, 'l').replace(/Ł/g, 'L')
-          .replace(/ń/g, 'n').replace(/Ń/g, 'N')
-          .replace(/ó/g, 'o').replace(/Ó/g, 'O')
-          .replace(/ś/g, 's').replace(/Ś/g, 'S')
-          .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
-          .replace(/ż/g, 'z').replace(/Ż/g, 'Z');
-      }
-    }
+      return String(text)
+        .replace(/ą/g, 'a').replace(/Ą/g, 'A')
+        .replace(/ć/g, 'c').replace(/Ć/g, 'C')
+        .replace(/ę/g, 'e').replace(/Ę/g, 'E')
+        .replace(/ł/g, 'l').replace(/Ł/g, 'L')
+        .replace(/ń/g, 'n').replace(/Ń/g, 'N')
+        .replace(/ó/g, 'o').replace(/Ó/g, 'O')
+        .replace(/ś/g, 's').replace(/Ś/g, 'S')
+        .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
+        .replace(/ż/g, 'z').replace(/Ż/g, 'Z');
+    };
+
+    // Funkcja do bezpiecznego dodawania tekstu
+    const addText = (text: string, x: number, y: number, options: any = {}) => {
+      if (!text) text = '';
+      const convertedText = convertText(text);
+      doc.text(convertedText, x, y, options);
+    };
     
     // Dodaj metadane PDF z UTF-8
     doc.setProperties({
@@ -231,8 +200,8 @@ export async function GET(
       startY: yPos,
       head: [[
         'Lp.', 
-        convertText('Nazwa towaru/uslugi'), 
-        convertText('Ilosc'), 
+        convertText('Nazwa towaru/usługi'), 
+        convertText('Ilość'), 
         'Cena netto', 
         'VAT', 
         convertText('Wartosc brutto')
@@ -367,11 +336,11 @@ export async function GET(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     
-    addText('W celu realizacji zamowienia prosze o kontakt:', 15, yPos);
+    addText('W celu realizacji zamówienia proszę o kontakt:', 15, yPos);
     addText(`Email: ${offer.created_by_email || ''} | Tel: +48 123 456 789`, 15, yPos + 6);
     
     yPos += 15;
-    addText('Dziekujemy za zainteresowanie nasza oferta.', 15, yPos);
+    addText('Dziękujemy za zainteresowanie naszą ofertą.', 15, yPos);
     addText('Pozdrawiamy,', 15, yPos + 6);
     
     doc.setFont('helvetica', 'bold');
