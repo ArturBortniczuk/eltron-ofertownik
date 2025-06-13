@@ -3,19 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
 import { db } from '../../../../../lib/db';
 
-// Importuj jsPDF bezpośrednio
-import jsPDF from 'jspdf';
+// Importuj jsPDF i autoTable
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-// Rozszerzenie interfejsu jsPDF
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => void;
-    lastAutoTable: {
-      finalY: number;
-    };
-  }
-}
 
 export async function GET(
   request: NextRequest,
@@ -66,9 +56,6 @@ export async function GET(
     // Stwórz nowy dokument PDF
     console.log('📄 Creating PDF document...');
     const doc = new jsPDF();
-    
-    // Dodaj autoTable do doc
-    doc.autoTable = autoTable;
     
     console.log('✅ PDF document created successfully');
     
@@ -156,8 +143,8 @@ export async function GET(
 
     console.log('📋 Creating table with', tableData.length, 'rows');
 
-    // Tabela z pozycjami
-    doc.autoTable({
+    // Tabela z pozycjami - używamy autoTable jako funkcji
+    autoTable(doc, {
       startY: yPosition,
       head: [['Lp.', 'Nazwa towaru/uslugi', 'Ilosc', 'Cena netto', 'VAT', 'Wartosc brutto']],
       body: tableData,
@@ -181,8 +168,8 @@ export async function GET(
       }
     });
 
-    // Pozycja po tabeli
-    yPosition = doc.lastAutoTable.finalY + 15;
+    // Pozycja po tabeli - autoTable dodaje finalY do doc
+    yPosition = (doc as any).lastAutoTable.finalY + 15;
 
     // Podsumowanie
     const totalNet = parseFloat(offer.total_net) || 0;
