@@ -61,6 +61,20 @@ export interface Offer {
   status: string;
 }
 
+export interface Client {
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  nip?: string;
+  contact_person?: string;
+  notes?: string;
+  created_by: number;
+  created_at: Date;
+  last_used: Date;
+}
+
 export interface OfferItem {
   id: number;
   offer_id: number;
