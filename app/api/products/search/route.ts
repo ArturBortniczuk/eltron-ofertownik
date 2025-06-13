@@ -1,3 +1,4 @@
+// app/api/products/search/route.ts - WERSJA DEBUG
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
@@ -20,7 +21,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
 
-    // Wyszukaj produkty z historii ofert wszystkich użytkowników
+    console.log('🔍 Search query:', query);
+
+    // NAJPIERW SPRAWDŹ CZY SĄ JAKIEKOLWIEK DANE W offer_items
+    const allItemsResult = await db.query(`
+      SELECT COUNT(*) as total FROM offer_items
+    `);
+    console.log('📊 Total offer_items in database:', allItemsResult.rows[0]?.total);
+
+    // SPRAWDŹ KONKRETNIE produkty z "Rura" w nazwie
+    const directTestResult = await db.query(`
+      SELECT 
+        oi.product_name,
+        oi.unit,
+        oi.unit_price,
+        o.created_at,
+        u.name as user_name
+      FROM offer_items oi
+      JOIN offers o ON oi.offer_id = o.id
+      JOIN users u ON o.user_id = u.id
+      WHERE oi.product_name ILIKE '%Rura%'
+      LIMIT 5
+    `);
+    console.log('🧪 Direct test for "Rura":', directTestResult.rows);
+
+    // ORYGINALNY QUERY z dodatkowym logowaniem
     const result = await db.query(`
       SELECT DISTINCT 
         oi.product_name as name,
@@ -48,6 +73,9 @@ export async function GET(request: NextRequest) {
       LIMIT 15
     `, [`%${query}%`, `${query}%`]);
 
+    console.log('📋 Query result rows:', result.rows.length);
+    console.log('📋 First few results:', result.rows.slice(0, 3));
+
     // Formatuj wyniki dla lepszego UX
     const formattedResults = result.rows.map(row => ({
       name: row.name,
@@ -61,10 +89,11 @@ export async function GET(request: NextRequest) {
       max_price: parseFloat(row.max_price)
     }));
 
+    console.log('✅ Returning formatted results:', formattedResults.length);
     return NextResponse.json(formattedResults);
 
   } catch (error) {
-    console.error('Product search error:', error);
+    console.error('❌ Product search error:', error);
     return NextResponse.json(
       { error: 'Błąd wyszukiwania produktów' },
       { status: 500 }
