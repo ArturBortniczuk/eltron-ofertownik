@@ -2,365 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
 import { db } from '../../../../../lib/db';
-import React from 'react';
-import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer';
-
-// Zarejestruj fonty z obsługą polskich znaków
-Font.register({
-  family: 'Roboto',
-  fonts: [
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
-      fontWeight: 300,
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf',
-      fontWeight: 400,
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-medium-webfont.ttf',
-      fontWeight: 500,
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf',
-      fontWeight: 600,
-    },
-  ]
-});
-
-// Style
-const styles = StyleSheet.create({
-  page: {
-    fontFamily: 'Roboto',
-    fontSize: 10,
-    paddingTop: 20,
-    paddingLeft: 20,
-    paddingRight: 20,
-    paddingBottom: 20,
-    lineHeight: 1.5,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    backgroundColor: '#3B4A5C',
-    padding: 15,
-    color: 'white',
-  },
-  headerLeft: {
-    flex: 2,
-  },
-  headerRight: {
-    flex: 1,
-    textAlign: 'right',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 600,
-    marginBottom: 5,
-  },
-  headerSubtitle: {
-    fontSize: 8,
-    marginBottom: 2,
-  },
-  clientBox: {
-    backgroundColor: '#F8F9FA',
-    border: '2pt solid #E9ECEF',
-    padding: 15,
-    marginBottom: 20,
-  },
-  clientLabel: {
-    fontSize: 9,
-    fontWeight: 600,
-    color: '#3B4A5C',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-  },
-  clientName: {
-    fontSize: 14,
-    fontWeight: 600,
-    marginBottom: 8,
-    color: '#212529',
-  },
-  clientDetails: {
-    fontSize: 9,
-    marginBottom: 3,
-    color: '#495057',
-  },
-  greeting: {
-    marginBottom: 20,
-    lineHeight: 1.5,
-  },
-  greetingText: {
-    fontSize: 10,
-    marginBottom: 5,
-    color: '#495057',
-  },
-  table: {
-    marginBottom: 20,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#3B4A5C',
-    color: 'white',
-    padding: 8,
-    fontSize: 9,
-    fontWeight: 600,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#DEE2E6',
-    padding: 8,
-    fontSize: 9,
-  },
-  tableRowEven: {
-    backgroundColor: '#F8F9FA',
-  },
-  col1: { width: '8%', textAlign: 'center' },
-  col2: { width: '40%', textAlign: 'left' },
-  col3: { width: '12%', textAlign: 'center' },
-  col4: { width: '15%', textAlign: 'right' },
-  col5: { width: '10%', textAlign: 'center' },
-  col6: { width: '15%', textAlign: 'right' },
-  summarySection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    gap: 20,
-  },
-  summaryBox: {
-    backgroundColor: '#F8F9FA',
-    border: '2pt solid #E9ECEF',
-    padding: 15,
-    width: '48%',
-  },
-  boxTitle: {
-    fontWeight: 600,
-    color: '#3B4A5C',
-    marginBottom: 10,
-    fontSize: 11,
-    textTransform: 'uppercase',
-  },
-  conditionItem: {
-    fontSize: 9,
-    marginBottom: 5,
-    color: '#495057',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    fontSize: 10,
-  },
-  summaryTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 2,
-    borderTopColor: '#3B4A5C',
-    fontWeight: 600,
-    color: '#3B4A5C',
-    fontSize: 12,
-  },
-  notesSection: {
-    marginTop: 20,
-    backgroundColor: '#F8F9FA',
-    padding: 15,
-    border: '2pt solid #E9ECEF',
-  },
-  notesTitle: {
-    fontWeight: 600,
-    color: '#3B4A5C',
-    marginBottom: 8,
-    fontSize: 11,
-    textTransform: 'uppercase',
-  },
-  notesContent: {
-    fontSize: 9,
-    lineHeight: 1.5,
-    color: '#495057',
-  },
-  footer: {
-    marginTop: 30,
-    paddingTop: 20,
-    borderTopWidth: 2,
-    borderTopColor: '#E9ECEF',
-    fontSize: 9,
-    color: '#6C757D',
-  },
-  footerText: {
-    marginBottom: 3,
-  },
-  footerSignature: {
-    fontWeight: 600,
-    color: '#3B4A5C',
-    marginTop: 10,
-  },
-});
-
-// Komponent PDF
-const OfferPDF = ({ offer, items }: any) => {
-  const offerDate = new Date(offer.created_at).toLocaleDateString('pl-PL');
-  const validDays = parseInt(offer.valid_days) || 30;
-  const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
-  const deliveryDays = parseInt(offer.delivery_days) || 0;
-  const totalNet = parseFloat(offer.total_net) || 0;
-  const totalVat = parseFloat(offer.total_vat) || 0;
-  const totalGross = parseFloat(offer.total_gross) || 0;
-  const additionalCosts = parseFloat(offer.additional_costs) || 0;
-
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>GRUPA ELTRON</Text>
-            <Text style={styles.headerSubtitle}>ul. Przykładowa 123, 00-000 Warszawa</Text>
-            <Text style={styles.headerSubtitle}>Tel: +48 123 456 789 | Email: kontakt@eltron.pl</Text>
-            <Text style={styles.headerSubtitle}>NIP: 123-456-78-90 | REGON: 123456789</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={[styles.headerTitle, { fontSize: 16 }]}>
-              OFERTA Nr {offer.id}/{new Date().getFullYear()}
-            </Text>
-            <Text style={styles.headerSubtitle}>Data: {offerDate}</Text>
-            <Text style={styles.headerSubtitle}>Ważna do: {validUntil}</Text>
-          </View>
-        </View>
-
-        {/* Client Box */}
-        <View style={styles.clientBox}>
-          <Text style={styles.clientLabel}>Oferta dla:</Text>
-          <Text style={styles.clientName}>{offer.client_name || ''}</Text>
-          {offer.client_email && (
-            <Text style={styles.clientDetails}>📧 Email: {offer.client_email}</Text>
-          )}
-          {offer.client_phone && (
-            <Text style={styles.clientDetails}>📞 Telefon: {offer.client_phone}</Text>
-          )}
-          {offer.client_nip && (
-            <Text style={styles.clientDetails}>🏢 NIP: {offer.client_nip}</Text>
-          )}
-        </View>
-
-        {/* Greeting */}
-        <View style={styles.greeting}>
-          <Text style={styles.greetingText}>Szanowni Państwo,</Text>
-          <Text style={styles.greetingText}>
-            W odpowiedzi na Państwa zapytanie przesyłamy ofertę na zamówione towary. 
-            Mamy nadzieję, że przedstawione warunki spotkają się z Państwa akceptacją.
-          </Text>
-        </View>
-
-        {/* Table */}
-        <View style={styles.table}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <Text style={styles.col1}>Lp.</Text>
-            <Text style={styles.col2}>Nazwa towaru/usługi</Text>
-            <Text style={styles.col3}>Ilość</Text>
-            <Text style={styles.col4}>Cena netto</Text>
-            <Text style={styles.col5}>VAT</Text>
-            <Text style={styles.col6}>Wartość brutto</Text>
-          </View>
-
-          {/* Table Rows */}
-          {items.map((item: any, index: number) => {
-            const quantity = parseFloat(item.quantity) || 0;
-            const unitPrice = parseFloat(item.unit_price) || 0;
-            const vatRate = parseFloat(item.vat_rate) || 0;
-            const grossAmount = parseFloat(item.gross_amount) || 0;
-
-            return (
-              <View 
-                key={index} 
-                style={[styles.tableRow, index % 2 === 1 && styles.tableRowEven]}
-              >
-                <Text style={styles.col1}>{index + 1}</Text>
-                <Text style={styles.col2}>{item.product_name || ''}</Text>
-                <Text style={styles.col3}>{quantity} {item.unit || ''}</Text>
-                <Text style={styles.col4}>{unitPrice.toFixed(2)} zł</Text>
-                <Text style={styles.col5}>{vatRate}%</Text>
-                <Text style={styles.col6}>{grossAmount.toFixed(2)} zł</Text>
-              </View>
-            );
-          })}
-
-          {/* Additional Costs Row */}
-          {additionalCosts > 0 && (
-            <View style={[styles.tableRow, { backgroundColor: '#E3F2FD', borderTopWidth: 2, borderTopColor: '#3B4A5C' }]}>
-              <Text style={styles.col1}></Text>
-              <Text style={styles.col2}>{offer.additional_costs_description || 'Dodatkowe koszty'}</Text>
-              <Text style={styles.col3}>1 usł</Text>
-              <Text style={styles.col4}>{additionalCosts.toFixed(2)} zł</Text>
-              <Text style={styles.col5}>23%</Text>
-              <Text style={styles.col6}>{(additionalCosts * 1.23).toFixed(2)} zł</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Summary Section */}
-        <View style={styles.summarySection}>
-          <View style={styles.summaryBox}>
-            <Text style={styles.boxTitle}>Warunki oferty:</Text>
-            <Text style={styles.conditionItem}>• Czas dostawy: {deliveryDays} dni roboczych</Text>
-            <Text style={styles.conditionItem}>• Ważność oferty: {validDays} dni od daty wystawienia</Text>
-            <Text style={styles.conditionItem}>• Forma płatności: przelew bankowy</Text>
-            <Text style={styles.conditionItem}>• Termin płatności: 14 dni od daty faktury</Text>
-            <Text style={styles.conditionItem}>• Ceny zawierają podatek VAT</Text>
-            <Text style={styles.conditionItem}>• Dostawa na adres klienta</Text>
-          </View>
-
-          <View style={styles.summaryBox}>
-            <Text style={styles.boxTitle}>Podsumowanie finansowe:</Text>
-            <View style={styles.summaryRow}>
-              <Text>Wartość netto:</Text>
-              <Text>{totalNet.toFixed(2)} zł</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text>Podatek VAT:</Text>
-              <Text>{totalVat.toFixed(2)} zł</Text>
-            </View>
-            <View style={styles.summaryTotal}>
-              <Text>RAZEM DO ZAPŁATY:</Text>
-              <Text>{totalGross.toFixed(2)} zł</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Notes */}
-        {offer.notes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.notesTitle}>Dodatkowe uwagi:</Text>
-            <Text style={styles.notesContent}>{offer.notes}</Text>
-          </View>
-        )}
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Kontakt w sprawie realizacji zamówienia:</Text>
-          <Text style={styles.footerText}>📧 Email: {offer.created_by_email || 'kontakt@eltron.pl'}</Text>
-          <Text style={styles.footerText}>📞 Telefon: +48 123 456 789</Text>
-          <Text style={styles.footerText}>🌐 www.eltron.pl</Text>
-          
-          <Text style={[styles.footerText, { marginTop: 15 }]}>
-            Dziękujemy za zainteresowanie naszą ofertą i liczymy na owocną współpracę.
-          </Text>
-          <Text style={styles.footerText}>W przypadku pytań jesteśmy do Państwa dyspozycji.</Text>
-          
-          <View style={{ marginTop: 10 }}>
-            <Text style={styles.footerSignature}>Z poważaniem,</Text>
-            <Text style={styles.footerSignature}>{offer.created_by_name || 'Zespół GRUPA ELTRON'}</Text>
-            <Text style={styles.footerSignature}>GRUPA ELTRON Sp. z o.o.</Text>
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-};
+import PDFDocument from 'pdfkit';
 
 export async function GET(
   request: NextRequest,
@@ -401,14 +43,253 @@ export async function GET(
     `, [offerId]);
     const items = itemsResult.rows;
 
-    // Generuj PDF z React PDF
-    const pdfDoc = <OfferPDF offer={offer} items={items} />;
-    const pdfBuffer = await pdf(pdfDoc).toBuffer();
+    // Przygotuj dane
+    const offerDate = new Date(offer.created_at).toLocaleDateString('pl-PL');
+    const validDays = parseInt(offer.valid_days) || 30;
+    const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
+    const deliveryDays = parseInt(offer.delivery_days) || 0;
+    const totalNet = parseFloat(offer.total_net) || 0;
+    const totalVat = parseFloat(offer.total_vat) || 0;
+    const totalGross = parseFloat(offer.total_gross) || 0;
+    const additionalCosts = parseFloat(offer.additional_costs) || 0;
 
-    // Zwróć PDF z prawidłową nazwą pliku
-    const clientName = String(offer.client_name || 'Klient')
-      .replace(/[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s]/g, '')
-      .replace(/\s+/g, '_');
+    // Stwórz PDF
+    const doc = new PDFDocument({ 
+      size: 'A4', 
+      margin: 50,
+      info: {
+        Title: `Oferta ${offer.id}/${new Date().getFullYear()}`,
+        Author: 'GRUPA ELTRON',
+        Subject: `Oferta dla ${offer.client_name}`,
+        Keywords: 'oferta, elektro, eltron'
+      }
+    });
+
+    const chunks: Buffer[] = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    
+    const pdfPromise = new Promise<Buffer>((resolve) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+
+    // Funkcja do konwersji polskich znaków (fallback)
+    const convertPolish = (text: string): string => {
+      if (!text) return '';
+      const polishMap: Record<string, string> = {
+        'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 
+        'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
+        'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N', 
+        'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z'
+      };
+      return text.split('').map(char => polishMap[char] || char).join('');
+    };
+
+    const safeText = (text: string): string => convertPolish(String(text || ''));
+
+    // HEADER - tło niebieskie
+    doc.rect(50, 50, 495, 80).fill('#3B4A5C');
+    
+    // Logo i nazwa firmy
+    doc.fillColor('white')
+       .fontSize(24)
+       .font('Helvetica-Bold')
+       .text('GRUPA ELTRON', 70, 75);
+    
+    doc.fontSize(9)
+       .font('Helvetica')
+       .text('ul. Przykladowa 123, 00-000 Warszawa', 70, 105)
+       .text('Tel: +48 123 456 789 | Email: kontakt@eltron.pl', 70, 118);
+
+    // Numer oferty po prawej
+    doc.fontSize(16)
+       .font('Helvetica-Bold')
+       .text(`OFERTA Nr ${offer.id}/${new Date().getFullYear()}`, 350, 75, { align: 'right', width: 180 });
+    
+    doc.fontSize(9)
+       .font('Helvetica')
+       .text(`Data: ${offerDate}`, 350, 105, { align: 'right', width: 180 })
+       .text(`Wazna do: ${validUntil}`, 350, 118, { align: 'right', width: 180 });
+
+    // CLIENT BOX
+    let yPos = 160;
+    doc.rect(50, yPos, 495, 70).fill('#F8F9FA').stroke('#E9ECEF');
+    
+    doc.fillColor('#3B4A5C')
+       .fontSize(10)
+       .font('Helvetica-Bold')
+       .text('OFERTA DLA:', 70, yPos + 15);
+    
+    doc.fillColor('black')
+       .fontSize(14)
+       .font('Helvetica-Bold')
+       .text(safeText(offer.client_name), 70, yPos + 30);
+
+    yPos += 50;
+    if (offer.client_email) {
+      doc.fontSize(9).font('Helvetica').text(`Email: ${safeText(offer.client_email)}`, 70, yPos);
+      yPos += 12;
+    }
+    if (offer.client_phone) {
+      doc.fontSize(9).text(`Tel: ${safeText(offer.client_phone)}`, 70, yPos);
+      yPos += 12;
+    }
+    if (offer.client_nip) {
+      doc.fontSize(9).text(`NIP: ${safeText(offer.client_nip)}`, 70, yPos);
+    }
+
+    // GREETING
+    yPos = 260;
+    doc.fontSize(10)
+       .fillColor('black')
+       .text('Szanowni Panstwo,', 50, yPos)
+       .text('W odpowiedzi na Panstwa zapytanie przesylamy oferte na zamowione towary.', 50, yPos + 15)
+       .text('Mamy nadzieje, ze przedstawione warunki spotka sie z Panstwa akceptacja.', 50, yPos + 30);
+
+    // TABLE
+    yPos = 320;
+    const tableTop = yPos;
+    const itemHeight = 20;
+    
+    // Table header
+    doc.rect(50, yPos, 495, 25).fill('#3B4A5C');
+    doc.fillColor('white')
+       .fontSize(9)
+       .font('Helvetica-Bold')
+       .text('Lp.', 60, yPos + 8, { width: 30, align: 'center' })
+       .text('Nazwa towaru/uslugi', 95, yPos + 8, { width: 200 })
+       .text('Ilosc', 300, yPos + 8, { width: 60, align: 'center' })
+       .text('Cena netto', 365, yPos + 8, { width: 60, align: 'right' })
+       .text('VAT', 430, yPos + 8, { width: 40, align: 'center' })
+       .text('Wartosc brutto', 475, yPos + 8, { width: 70, align: 'right' });
+
+    yPos += 25;
+
+    // Table rows
+    items.forEach((item: any, index: number) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const unitPrice = parseFloat(item.unit_price) || 0;
+      const vatRate = parseFloat(item.vat_rate) || 0;
+      const grossAmount = parseFloat(item.gross_amount) || 0;
+
+      // Alternating row colors
+      if (index % 2 === 1) {
+        doc.rect(50, yPos, 495, itemHeight).fill('#F8F9FA');
+      }
+
+      doc.fillColor('black')
+         .fontSize(8)
+         .font('Helvetica')
+         .text((index + 1).toString(), 60, yPos + 6, { width: 30, align: 'center' })
+         .text(safeText(item.product_name).substring(0, 40), 95, yPos + 6, { width: 200 })
+         .text(`${quantity} ${safeText(item.unit)}`, 300, yPos + 6, { width: 60, align: 'center' })
+         .text(`${unitPrice.toFixed(2)} zl`, 365, yPos + 6, { width: 60, align: 'right' })
+         .text(`${vatRate}%`, 430, yPos + 6, { width: 40, align: 'center' })
+         .text(`${grossAmount.toFixed(2)} zl`, 475, yPos + 6, { width: 70, align: 'right' });
+
+      yPos += itemHeight;
+    });
+
+    // Additional costs
+    if (additionalCosts > 0) {
+      doc.rect(50, yPos, 495, itemHeight).fill('#E3F2FD').stroke('#3B4A5C');
+      doc.fillColor('black')
+         .fontSize(8)
+         .font('Helvetica-Bold')
+         .text('', 60, yPos + 6, { width: 30, align: 'center' })
+         .text(safeText(offer.additional_costs_description || 'Dodatkowe koszty'), 95, yPos + 6, { width: 200 })
+         .text('1 usl', 300, yPos + 6, { width: 60, align: 'center' })
+         .text(`${additionalCosts.toFixed(2)} zl`, 365, yPos + 6, { width: 60, align: 'right' })
+         .text('23%', 430, yPos + 6, { width: 40, align: 'center' })
+         .text(`${(additionalCosts * 1.23).toFixed(2)} zl`, 475, yPos + 6, { width: 70, align: 'right' });
+      yPos += itemHeight;
+    }
+
+    // SUMMARY BOXES
+    yPos += 30;
+    
+    // Left box - Conditions
+    doc.rect(50, yPos, 240, 100).fill('#F8F9FA').stroke('#E9ECEF');
+    doc.fillColor('#3B4A5C')
+       .fontSize(10)
+       .font('Helvetica-Bold')
+       .text('WARUNKI OFERTY:', 65, yPos + 15);
+    
+    doc.fillColor('black')
+       .fontSize(9)
+       .font('Helvetica')
+       .text(`• Czas dostawy: ${deliveryDays} dni roboczych`, 65, yPos + 35)
+       .text(`• Waznosc oferty: ${validDays} dni`, 65, yPos + 50)
+       .text('• Forma platnosci: przelew bankowy', 65, yPos + 65)
+       .text('• Termin platnosci: 14 dni od faktury', 65, yPos + 80);
+
+    // Right box - Financial summary
+    doc.rect(305, yPos, 240, 100).fill('#F8F9FA').stroke('#E9ECEF');
+    doc.fillColor('#3B4A5C')
+       .fontSize(10)
+       .font('Helvetica-Bold')
+       .text('PODSUMOWANIE FINANSOWE:', 320, yPos + 15);
+    
+    doc.fillColor('black')
+       .fontSize(9)
+       .font('Helvetica')
+       .text('Wartosc netto:', 320, yPos + 40)
+       .text(`${totalNet.toFixed(2)} zl`, 480, yPos + 40, { align: 'right' })
+       .text('Podatek VAT:', 320, yPos + 55)
+       .text(`${totalVat.toFixed(2)} zl`, 480, yPos + 55, { align: 'right' });
+
+    // Total line
+    doc.strokeColor('#3B4A5C').lineWidth(2);
+    doc.moveTo(320, yPos + 70).lineTo(530, yPos + 70).stroke();
+    
+    doc.fillColor('#3B4A5C')
+       .fontSize(11)
+       .font('Helvetica-Bold')
+       .text('RAZEM DO ZAPLATY:', 320, yPos + 80)
+       .text(`${totalGross.toFixed(2)} zl`, 480, yPos + 80, { align: 'right' });
+
+    // NOTES
+    if (offer.notes) {
+      yPos += 130;
+      doc.rect(50, yPos, 495, 60).fill('#F8F9FA').stroke('#E9ECEF');
+      doc.fillColor('#3B4A5C')
+         .fontSize(10)
+         .font('Helvetica-Bold')
+         .text('DODATKOWE UWAGI:', 65, yPos + 15);
+      
+      doc.fillColor('black')
+         .fontSize(9)
+         .font('Helvetica')
+         .text(safeText(offer.notes).substring(0, 200), 65, yPos + 35, { width: 465 });
+    }
+
+    // FOOTER
+    yPos = 700;
+    doc.strokeColor('#E9ECEF').lineWidth(1);
+    doc.moveTo(50, yPos).lineTo(545, yPos).stroke();
+    
+    doc.fillColor('black')
+       .fontSize(9)
+       .font('Helvetica')
+       .text('Kontakt w sprawie realizacji zamowienia:', 50, yPos + 15)
+       .text(`Email: ${safeText(offer.created_by_email || 'kontakt@eltron.pl')}`, 50, yPos + 30)
+       .text('Telefon: +48 123 456 789', 50, yPos + 45)
+       .text('Dziekujemy za zainteresowanie nasza oferta i liczymy na owocna wspolprace.', 50, yPos + 65);
+
+    doc.fontSize(10)
+       .font('Helvetica-Bold')
+       .fillColor('#3B4A5C')
+       .text('Z powazaniem,', 50, yPos + 85)
+       .text(safeText(offer.created_by_name || 'Zespol GRUPA ELTRON'), 50, yPos + 100)
+       .text('GRUPA ELTRON Sp. z o.o.', 50, yPos + 115);
+
+    // Zakończ dokument
+    doc.end();
+
+    // Czekaj na wygenerowanie PDF
+    const pdfBuffer = await pdfPromise;
+
+    // Zwróć PDF
+    const clientName = safeText(offer.client_name || 'Klient').replace(/\s+/g, '_');
     const fileName = `Oferta_${offer.id}_${clientName}.pdf`;
 
     return new NextResponse(pdfBuffer, {
@@ -421,7 +302,7 @@ export async function GET(
   } catch (error) {
     console.error('PDF generation error:', error);
     return NextResponse.json(
-      { error: 'Błąd generowania PDF: ' + (error instanceof Error ? error.message : 'Nieznany błąd') },
+      { error: 'Blad generowania PDF: ' + (error instanceof Error ? error.message : 'Nieznany blad') },
       { status: 500 }
     );
   }
