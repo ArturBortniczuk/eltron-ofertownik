@@ -26,9 +26,11 @@ export async function GET(
       SELECT 
         o.*,
         u.name as created_by_name,
-        u.email as created_by_email
+        u.email as created_by_email,
+        c.nip as client_nip
       FROM offers o
       JOIN users u ON o.user_id = u.id
+      LEFT JOIN clients c ON o.client_id = c.id
       WHERE o.id = $1 AND o.user_id = $2
     `, [offerId, userId]);
 
@@ -80,7 +82,7 @@ export async function GET(
     const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
     
     const dateText = `Data: ${offerDate}`;
-    const validText = `Wazna do: ${validUntil}`;
+    const validText = `Ważna do: ${validUntil}`;
     doc.text(dateText, pageWidth - doc.getTextWidth(dateText) - 15, 30);
     doc.text(validText, pageWidth - doc.getTextWidth(validText) - 15, 37);
 
@@ -90,7 +92,7 @@ export async function GET(
     // Ramka dla klienta
     doc.setDrawColor(200, 200, 200);
     doc.setFillColor(248, 249, 250);
-    doc.roundedRect(15, yPos, pageWidth - 30, 35, 2, 2, 'FD');
+    doc.roundedRect(15, yPos, pageWidth - 30, 40, 2, 2, 'FD');
     
     // Nagłówek "Dla:"
     doc.setTextColor(59, 74, 92);
@@ -104,9 +106,17 @@ export async function GET(
     doc.setFont('helvetica', 'bold');
     doc.text(String(offer.client_name || ''), 20, yPos + 20);
     
+    // NIP obok nazwy klienta jeśli istnieje
+    if (offer.client_nip) {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const clientNameWidth = doc.getTextWidth(String(offer.client_name || ''));
+      doc.text(`(NIP: ${offer.client_nip})`, 25 + clientNameWidth, yPos + 20);
+    }
+    
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    let clientYPos = yPos + 28;
+    let clientYPos = yPos + 30;
     if (offer.client_email) {
       doc.text(`Email: ${offer.client_email}`, 20, clientYPos);
     }
@@ -117,15 +127,15 @@ export async function GET(
     }
 
     // === POWITANIE ===
-    yPos = 105;
+    yPos = 110;
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.text('Dzien dobry,', 15, yPos);
-    doc.text('Przesylam oferte na zamowione towary zgodnie z Panstwa zapytaniem.', 15, yPos + 8);
+    doc.text('Dzień dobry,', 15, yPos);
+    doc.text('Przesyłam ofertę na zamówione towary zgodnie z Państwa zapytaniem.', 15, yPos + 8);
 
     // === TABELA Z POZYCJAMI ===
-    yPos = 125;
+    yPos = 130;
     
     // Przygotuj dane do tabeli
     const tableData = items.map((item, index) => {
@@ -138,9 +148,9 @@ export async function GET(
         String(index + 1),
         String(item.product_name || ''),
         `${quantity} ${item.unit || ''}`,
-        `${unitPrice.toFixed(2)} zl`,
+        `${unitPrice.toFixed(2)} zł`,
         `${vatRate}%`,
-        `${grossAmount.toFixed(2)} zl`
+        `${grossAmount.toFixed(2)} zł`
       ];
     });
 
@@ -151,17 +161,17 @@ export async function GET(
       tableData.push([
         '',
         String(offer.additional_costs_description || 'Dodatkowe koszty'),
-        '1 usl',
-        `${additionalCosts.toFixed(2)} zl`,
+        '1 usł',
+        `${additionalCosts.toFixed(2)} zł`,
         '23%',
-        `${additionalGross.toFixed(2)} zl`
+        `${additionalGross.toFixed(2)} zł`
       ]);
     }
 
-    // Stwórz tabelę - POPRAWIONE SZEROKOŚCI
+    // Stwórz tabelę - WYRÓWNANA DO PEŁNEJ SZEROKOŚCI
     autoTable(doc, {
       startY: yPos,
-      head: [['Lp.', 'Nazwa towaru/uslugi', 'Ilosc', 'Cena netto', 'VAT', 'Wartosc brutto']],
+      head: [['Lp.', 'Nazwa towaru/usługi', 'Ilość', 'Cena netto', 'VAT', 'Wartość brutto']],
       body: tableData,
       theme: 'striped',
       headStyles: {
@@ -173,15 +183,15 @@ export async function GET(
       },
       bodyStyles: {
         fontSize: 9,
-        cellPadding: 3
+        cellPadding: 4
       },
       columnStyles: {
         0: { halign: 'center', cellWidth: 12 },      // Lp.
-        1: { cellWidth: 95, halign: 'left' },        // Nazwa - szersze
-        2: { halign: 'center', cellWidth: 20 },      // Ilość 
-        3: { halign: 'right', cellWidth: 25 },       // Cena netto
+        1: { cellWidth: 100, halign: 'left' },       // Nazwa - jeszcze szersze
+        2: { halign: 'center', cellWidth: 22 },      // Ilość 
+        3: { halign: 'right', cellWidth: 28 },       // Cena netto
         4: { halign: 'center', cellWidth: 15 },      // VAT
-        5: { halign: 'right', cellWidth: 25 }        // Wartość brutto
+        5: { halign: 'right', cellWidth: 30 }        // Wartość brutto
       },
       alternateRowStyles: {
         fillColor: [248, 249, 250]
@@ -191,7 +201,7 @@ export async function GET(
         lineWidth: 0.3,
         fontSize: 9
       },
-      tableWidth: 'wrap',
+      tableWidth: 'auto',  // Auto szerokość - dopasuje do treści
       margin: { left: 15, right: 15 }
     });
 
@@ -214,11 +224,11 @@ export async function GET(
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    doc.text('Wartosc netto:', summaryX + 5, yPos + 8);
-    doc.text(`${totalNet.toFixed(2)} zl`, summaryX + summaryWidth - 5, yPos + 8, { align: 'right' });
+    doc.text('Wartość netto:', summaryX + 5, yPos + 8);
+    doc.text(`${totalNet.toFixed(2)} zł`, summaryX + summaryWidth - 5, yPos + 8, { align: 'right' });
     
     doc.text('VAT:', summaryX + 5, yPos + 15);
-    doc.text(`${totalVat.toFixed(2)} zl`, summaryX + summaryWidth - 5, yPos + 15, { align: 'right' });
+    doc.text(`${totalVat.toFixed(2)} zł`, summaryX + summaryWidth - 5, yPos + 15, { align: 'right' });
     
     // Linia separująca
     doc.setDrawColor(59, 74, 92);
@@ -229,8 +239,8 @@ export async function GET(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(59, 74, 92);
-    doc.text('RAZEM DO ZAPLATY:', summaryX + 5, yPos + 25);
-    doc.text(`${totalGross.toFixed(2)} zl`, summaryX + summaryWidth - 5, yPos + 25, { align: 'right' });
+    doc.text('RAZEM DO ZAPŁATY:', summaryX + 5, yPos + 25);
+    doc.text(`${totalGross.toFixed(2)} zł`, summaryX + summaryWidth - 5, yPos + 25, { align: 'right' });
 
     // === WARUNKI ===
     yPos += 45;
@@ -244,10 +254,10 @@ export async function GET(
     const deliveryDays = parseInt(offer.delivery_days) || 0;
     
     const conditions = [
-      `- Przewidywany czas dostawy: ${deliveryDays} dni roboczych`,
-      `- Oferta wazna przez: ${validDays} dni`,
-      `- Platnosc: przelew 14 dni`,
-      `- Ceny zawieraja VAT`
+      `• Przewidywany czas dostawy: ${deliveryDays} dni roboczych`,
+      `• Oferta ważna przez: ${validDays} dni`,
+      `• Płatność: przelew 14 dni`,
+      `• Ceny zawierają VAT`
     ];
     
     conditions.forEach((condition, index) => {
@@ -281,11 +291,11 @@ export async function GET(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     
-    doc.text('W celu realizacji zamowienia prosze o kontakt:', 15, yPos);
+    doc.text('W celu realizacji zamówienia proszę o kontakt:', 15, yPos);
     doc.text(`Email: ${offer.created_by_email || ''} | Tel: +48 123 456 789`, 15, yPos + 6);
     
     yPos += 15;
-    doc.text('Dziekujemy za zainteresowanie nasza oferta.', 15, yPos);
+    doc.text('Dziękujemy za zainteresowanie naszą ofertą.', 15, yPos);
     doc.text('Pozdrawiamy,', 15, yPos + 6);
     
     doc.setFont('helvetica', 'bold');
