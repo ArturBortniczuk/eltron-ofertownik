@@ -50,6 +50,13 @@ export async function GET(
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
     
+    // Dodaj obsługę polskich znaków
+    doc.setProperties({
+      title: `Oferta ${offer.id}`,
+      creator: 'Grupa Eltron',
+      encoding: 'UTF-8'
+    });
+    
     // === HEADER Z LOGO I ADRESEM ===
     // Tło header
     doc.setFillColor(59, 74, 92);
@@ -106,23 +113,21 @@ export async function GET(
     doc.setFont('helvetica', 'bold');
     doc.text(String(offer.client_name || ''), 20, yPos + 20);
     
-    // NIP obok nazwy klienta jeśli istnieje
-    if (offer.client_nip) {
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const clientNameWidth = doc.getTextWidth(String(offer.client_name || ''));
-      doc.text(`(NIP: ${offer.client_nip})`, 25 + clientNameWidth, yPos + 20);
-    }
-    
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    let clientYPos = yPos + 30;
+    let clientYPos = yPos + 28;
+    
+    // Email i NIP w pierwszym wierszu
     if (offer.client_email) {
       doc.text(`Email: ${offer.client_email}`, 20, clientYPos);
     }
-    if (offer.client_phone && offer.client_email) {
-      doc.text(`Tel: ${offer.client_phone}`, 120, clientYPos);
-    } else if (offer.client_phone) {
+    if (offer.client_nip) {
+      doc.text(`NIP: ${offer.client_nip}`, 120, clientYPos);
+    }
+    
+    // Telefon w drugim wierszu
+    if (offer.client_phone) {
+      clientYPos += 7;
       doc.text(`Tel: ${offer.client_phone}`, 20, clientYPos);
     }
 
@@ -168,7 +173,7 @@ export async function GET(
       ]);
     }
 
-    // Stwórz tabelę - WYRÓWNANA DO PEŁNEJ SZEROKOŚCI
+    // Stwórz tabelę - ZMNIEJSZONA SZEROKOŚĆ, wyrównana do marginesów
     autoTable(doc, {
       startY: yPos,
       head: [['Lp.', 'Nazwa towaru/usługi', 'Ilość', 'Cena netto', 'VAT', 'Wartość brutto']],
@@ -183,15 +188,15 @@ export async function GET(
       },
       bodyStyles: {
         fontSize: 9,
-        cellPadding: 4
+        cellPadding: 3
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 12 },      // Lp.
-        1: { cellWidth: 100, halign: 'left' },       // Nazwa - jeszcze szersze
-        2: { halign: 'center', cellWidth: 22 },      // Ilość 
-        3: { halign: 'right', cellWidth: 28 },       // Cena netto
-        4: { halign: 'center', cellWidth: 15 },      // VAT
-        5: { halign: 'right', cellWidth: 30 }        // Wartość brutto
+        0: { halign: 'center', cellWidth: 10 },      // Lp. - mniejsze
+        1: { cellWidth: 85, halign: 'left' },        // Nazwa - zmniejszone
+        2: { halign: 'center', cellWidth: 18 },      // Ilość - mniejsze
+        3: { halign: 'right', cellWidth: 24 },       // Cena netto - mniejsze
+        4: { halign: 'center', cellWidth: 12 },      // VAT - mniejsze
+        5: { halign: 'right', cellWidth: 26 }        // Wartość brutto - mniejsze
       },
       alternateRowStyles: {
         fillColor: [248, 249, 250]
@@ -201,7 +206,7 @@ export async function GET(
         lineWidth: 0.3,
         fontSize: 9
       },
-      tableWidth: 'auto',  // Auto szerokość - dopasuje do treści
+      tableWidth: 175,  // Stała szerokość - dopasowana do marginesów
       margin: { left: 15, right: 15 }
     });
 
