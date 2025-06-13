@@ -1,4 +1,4 @@
-// app/dashboard/offers/new/page.tsx - ZAKTUALIZOWANA WERSJA
+// app/dashboard/offers/new/page.tsx - ZAKTUALIZOWANA WERSJA z historią ofert
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -27,12 +27,15 @@ interface OfferItem {
 }
 
 interface ProductSuggestion {
-  id: number;
   name: string;
   unit: string;
   last_price: number;
   last_used_by: string;
   last_used_at: string;
+  usage_count: number;
+  avg_price: number;
+  min_price: number;
+  max_price: number;
 }
 
 export default function NewOfferPage() {
@@ -47,7 +50,7 @@ export default function NewOfferPage() {
   const [showClientSelector, setShowClientSelector] = useState(true);
   const [clientSearch, setClientSearch] = useState('');
   
-  // Dane oferty (reszta bez zmian)
+  // Dane oferty
   const [deliveryDays, setDeliveryDays] = useState(14);
   const [validDays, setValidDays] = useState(30);
   const [additionalCosts, setAdditionalCosts] = useState(0);
@@ -122,7 +125,7 @@ export default function NewOfferPage() {
     }).catch(console.error);
   };
 
-  // Wyszukiwanie produktów (bez zmian)
+  // Wyszukiwanie produktów z historii ofert
   const searchProducts = async (query: string) => {
     if (query.length < 2) {
       setProductSuggestions([]);
@@ -142,7 +145,6 @@ export default function NewOfferPage() {
     }
   };
 
-  // Funkcje obsługi produktów (bez zmian - kopiuję z oryginalnej wersji)
   const handleProductNameChange = (value: string) => {
     setCurrentItem(prev => ({ ...prev, product_name: value }));
     searchProducts(value);
@@ -156,7 +158,12 @@ export default function NewOfferPage() {
       unit_price: product.last_price
     }));
     setShowSuggestions(false);
-    calculateAmounts({ ...currentItem, product_name: product.name, unit: product.unit, unit_price: product.last_price });
+    calculateAmounts({ 
+      ...currentItem, 
+      product_name: product.name, 
+      unit: product.unit, 
+      unit_price: product.last_price 
+    });
   };
 
   const calculateAmounts = (item: OfferItem) => {
@@ -448,24 +455,63 @@ export default function NewOfferPage() {
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   />
                   
-                  {/* Podpowiedzi produktów */}
+                  {/* Podpowiedzi produktów z historii ofert */}
                   {showSuggestions && productSuggestions.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {productSuggestions.map((product) => (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                      {productSuggestions.map((product, index) => (
                         <button
-                          key={product.id}
+                          key={index}
                           type="button"
                           onClick={() => selectProduct(product)}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                          className="w-full text-left px-4 py-4 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                         >
-                          <div className="font-medium text-gray-900">{product.name}</div>
-                          <div className="text-sm text-gray-600">
-                            Ostatnia cena: {product.last_price} zł/{product.unit} 
-                            • {product.last_used_by} 
-                            • {new Date(product.last_used_at).toLocaleDateString('pl-PL')}
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900 mb-1">{product.name}</div>
+                              <div className="text-sm text-gray-600 mb-2">
+                                Jednostka: <span className="font-medium">{product.unit}</span>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
+                                <div>
+                                  <div className="font-medium text-gray-700">Ostatnia cena:</div>
+                                  <div className="text-eltron-primary font-bold">
+                                    {product.last_price.toFixed(2)} zł/{product.unit}
+                                  </div>
+                                  <div>przez {product.last_used_by}</div>
+                                  <div>{new Date(product.last_used_at).toLocaleDateString('pl-PL')}</div>
+                                </div>
+                                
+                                <div>
+                                  <div className="font-medium text-gray-700">Statystyki:</div>
+                                  <div>Użyto: <span className="font-medium">{product.usage_count}x</span></div>
+                                  <div>Średnia: <span className="font-medium">{product.avg_price.toFixed(2)} zł</span></div>
+                                  <div className="text-xs">
+                                    {product.min_price.toFixed(2)} - {product.max_price.toFixed(2)} zł
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="ml-4 text-right">
+                              <div className="text-xs text-gray-500 mb-1">Kliknij aby dodać</div>
+                              <div className="bg-eltron-primary/10 text-eltron-primary px-2 py-1 rounded text-xs font-medium">
+                                Użyj
+                              </div>
+                            </div>
                           </div>
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {showSuggestions && productSuggestions.length === 0 && currentItem.product_name.length >= 2 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                      <div className="px-4 py-8 text-center text-gray-500">
+                        <div className="text-lg mb-2">🔍</div>
+                        <div>Nie znaleziono produktów w historii ofert</div>
+                        <div className="text-sm mt-1">Wpisz pełną nazwę produktu aby go dodać</div>
+                      </div>
                     </div>
                   )}
                 </div>
