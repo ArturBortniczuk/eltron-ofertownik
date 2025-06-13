@@ -1,9 +1,10 @@
-// app/dashboard/offers/new/page.tsx - KOMPLETNA POPRAWIONA WERSJA
+// app/dashboard/offers/new/page.tsx - NAPRAWIONA WERSJA
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import Link from 'next/link';
 
 interface Client {
   id: number;
@@ -42,7 +43,7 @@ export default function NewOfferPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preselectedClientId = searchParams.get('client');
+  const preselectedClientId = searchParams?.get('client');
   
   // Wybór klienta
   const [clients, setClients] = useState<Client[]>([]);
@@ -287,6 +288,14 @@ export default function NewOfferPage() {
 
   const totals = calculateTotals();
 
+  if (!session) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="text-lg">Ładowanie...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
@@ -300,21 +309,21 @@ export default function NewOfferPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="error-text">{error}</div>
+          <div className="text-red-600 text-sm">{error}</div>
         </div>
       )}
 
       {/* Wybór klienta */}
       {showClientSelector ? (
-        <div className="card">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-gray-900">Wybierz klienta</h2>
-            <button
-              onClick={() => router.push('/dashboard/clients/new')}
-              className="btn-secondary text-sm"
+            <Link
+              href="/dashboard/clients/new"
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
             >
               ➕ Dodaj nowego klienta
-            </button>
+            </Link>
           </div>
 
           <div className="mb-6">
@@ -323,7 +332,7 @@ export default function NewOfferPage() {
               value={clientSearch}
               onChange={(e) => setClientSearch(e.target.value)}
               placeholder="Szukaj klientów..."
-              className="input-field"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
@@ -338,12 +347,12 @@ export default function NewOfferPage() {
                   ? 'Spróbuj innych słów kluczowych lub dodaj nowego klienta.'
                   : 'Dodaj pierwszego klienta, aby móc tworzyć oferty.'}
               </p>
-              <button
-                onClick={() => router.push('/dashboard/clients/new')}
-                className="btn-primary"
+              <Link
+                href="/dashboard/clients/new"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
               >
                 Dodaj klienta
-              </button>
+              </Link>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -351,9 +360,9 @@ export default function NewOfferPage() {
                 <button
                   key={client.id}
                   onClick={() => selectClient(client)}
-                  className="text-left p-4 border border-gray-200 rounded-lg hover:border-eltron-primary hover:bg-eltron-primary/5 transition-colors group"
+                  className="text-left p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group"
                 >
-                  <div className="font-medium text-gray-900 group-hover:text-eltron-primary mb-2">
+                  <div className="font-medium text-gray-900 group-hover:text-blue-600 mb-2">
                     {client.name}
                   </div>
                   {client.contact_person && (
@@ -381,7 +390,7 @@ export default function NewOfferPage() {
           {/* Główny formularz */}
           <div className="lg:col-span-2 space-y-6">
             {/* Wybrany klient */}
-            <div className="card">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">Wybrany klient</h2>
@@ -400,7 +409,7 @@ export default function NewOfferPage() {
                 </div>
                 <button
                   onClick={() => setShowClientSelector(true)}
-                  className="btn-secondary text-sm"
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
                 >
                   Zmień klienta
                 </button>
@@ -408,7 +417,7 @@ export default function NewOfferPage() {
             </div>
 
             {/* Parametry oferty */}
-            <div className="card">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Parametry oferty</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -419,7 +428,7 @@ export default function NewOfferPage() {
                     type="number"
                     value={deliveryDays}
                     onChange={(e) => setDeliveryDays(parseInt(e.target.value) || 14)}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     min="1"
                   />
                 </div>
@@ -431,7 +440,7 @@ export default function NewOfferPage() {
                     type="number"
                     value={validDays}
                     onChange={(e) => setValidDays(parseInt(e.target.value) || 30)}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     min="1"
                   />
                 </div>
@@ -439,7 +448,7 @@ export default function NewOfferPage() {
             </div>
 
             {/* Dodawanie pozycji */}
-            <div className="card">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Dodaj pozycję</h2>
               
               <div className="space-y-4">
@@ -451,7 +460,7 @@ export default function NewOfferPage() {
                     type="text"
                     value={currentItem.product_name}
                     onChange={(e) => handleProductNameChange(e.target.value)}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Zacznij pisać nazwę produktu..."
                   />
                 </div>
@@ -465,7 +474,7 @@ export default function NewOfferPage() {
                       type="number"
                       value={currentItem.quantity}
                       onChange={(e) => handleItemChange('quantity', parseFloat(e.target.value) || 0)}
-                      className="input-field"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                       step="0.001"
                     />
@@ -477,7 +486,7 @@ export default function NewOfferPage() {
                     <select
                       value={currentItem.unit}
                       onChange={(e) => handleItemChange('unit', e.target.value)}
-                      className="input-field"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="szt">szt</option>
                       <option value="m">m</option>
@@ -495,7 +504,7 @@ export default function NewOfferPage() {
                       type="number"
                       value={currentItem.unit_price}
                       onChange={(e) => handleItemChange('unit_price', parseFloat(e.target.value) || 0)}
-                      className="input-field"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       min="0"
                       step="0.01"
                     />
@@ -507,7 +516,7 @@ export default function NewOfferPage() {
                     <select
                       value={currentItem.vat_rate}
                       onChange={(e) => handleItemChange('vat_rate', parseFloat(e.target.value))}
-                      className="input-field"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="23">23%</option>
                       <option value="8">8%</option>
@@ -519,7 +528,7 @@ export default function NewOfferPage() {
                     <button
                       type="button"
                       onClick={addItem}
-                      className="btn-primary w-full"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
                     >
                       Dodaj
                     </button>
@@ -549,9 +558,9 @@ export default function NewOfferPage() {
               </div>
             </div>
 
-            {/* Historia produktów - nowa tabela */}
+            {/* Historia produktów */}
             {currentItem.product_name.length >= 2 && (
-              <div className="card">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-semibold text-gray-900">
                     Historia produktów ({productSuggestions.length})
@@ -579,7 +588,7 @@ export default function NewOfferPage() {
                       </thead>
                       <tbody>
                         {productSuggestions.map((product, index) => (
-                          <tr key={index} className="table-row">
+                          <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors duration-150">
                             <td className="py-3 px-2">
                               <div className="font-medium text-gray-900">{product.name}</div>
                             </td>
@@ -587,7 +596,7 @@ export default function NewOfferPage() {
                               <span className="text-sm bg-gray-100 px-2 py-1 rounded">{product.unit}</span>
                             </td>
                             <td className="py-3 px-2">
-                              <div className="font-bold text-eltron-primary">
+                              <div className="font-bold text-blue-600">
                                 {product.last_price.toFixed(2)} zł
                               </div>
                               <div className="text-xs text-gray-500">
@@ -612,7 +621,7 @@ export default function NewOfferPage() {
                               <button
                                 type="button"
                                 onClick={() => selectProduct(product)}
-                                className="bg-eltron-primary text-white px-3 py-1 rounded text-sm font-medium hover:bg-eltron-primary/90 transition-colors"
+                                className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-blue-700 transition-colors"
                               >
                                 Użyj
                               </button>
@@ -641,7 +650,7 @@ export default function NewOfferPage() {
 
             {/* Lista dodanych pozycji */}
             {items.length > 0 && (
-              <div className="card">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Pozycje w ofercie</h2>
                 <div className="space-y-3">
                   {items.map((item, index) => (
@@ -666,7 +675,7 @@ export default function NewOfferPage() {
             )}
 
             {/* Dodatkowe koszty */}
-            <div className="card">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Dodatkowe koszty</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -677,7 +686,7 @@ export default function NewOfferPage() {
                     type="number"
                     value={additionalCosts}
                     onChange={(e) => setAdditionalCosts(parseFloat(e.target.value) || 0)}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     min="0"
                     step="0.01"
                   />
@@ -690,7 +699,7 @@ export default function NewOfferPage() {
                     type="text"
                     value={additionalCostsDescription}
                     onChange={(e) => setAdditionalCostsDescription(e.target.value)}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="np. Transport, montaż"
                   />
                 </div>
@@ -698,12 +707,12 @@ export default function NewOfferPage() {
             </div>
 
             {/* Uwagi */}
-            <div className="card">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Uwagi</h2>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="input-field"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows={4}
                 placeholder="Dodatkowe informacje dla klienta..."
               />
@@ -712,7 +721,7 @@ export default function NewOfferPage() {
 
           {/* Sidebar z podsumowaniem */}
           <div className="lg:col-span-1">
-            <div className="card sticky top-4">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-4">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Podsumowanie</h2>
               
               <div className="space-y-3 mb-6">
@@ -733,7 +742,7 @@ export default function NewOfferPage() {
                 
                 <div className="flex justify-between border-t border-gray-200 pt-3">
                   <span className="text-lg font-semibold">RAZEM:</span>
-                  <span className="text-lg font-bold text-eltron-primary">
+                  <span className="text-lg font-bold text-blue-600">
                     {totals.gross.toFixed(2)} zł
                   </span>
                 </div>
@@ -743,7 +752,7 @@ export default function NewOfferPage() {
                 <button
                   onClick={() => saveOffer('draft')}
                   disabled={saving}
-                  className="w-full btn-secondary disabled:opacity-50"
+                  className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
                 >
                   {saving ? 'Zapisywanie...' : '💾 Zapisz jako szkic'}
                 </button>
@@ -751,7 +760,7 @@ export default function NewOfferPage() {
                 <button
                   onClick={() => saveOffer('sent')}
                   disabled={saving}
-                  className="w-full btn-primary disabled:opacity-50"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
                 >
                   {saving ? 'Zapisywanie...' : '📤 Zapisz i wyślij'}
                 </button>
