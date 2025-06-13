@@ -1,21 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import ClientOnly from '../components/ClientOnly';
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isClient, setIsClient] = useState(false);
   const router = useRouter();
-
-  // Napraw hydration
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,15 +35,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
-  // Podczas ładowania po stronie serwera
-  if (!isClient) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-eltron-primary via-gray-100 to-eltron-light">
-        <div className="text-lg">Ładowanie...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-eltron-primary via-gray-100 to-eltron-light">
@@ -122,5 +108,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <ClientOnly 
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-lg">Ładowanie...</div>
+        </div>
+      }
+    >
+      <LoginForm />
+    </ClientOnly>
   );
 }
