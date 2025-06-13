@@ -3,6 +3,8 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
+  // Wyłącz React Strict Mode który może powodować problemy z hydration
+  reactStrictMode: false,
   async redirects() {
     return [
       {
