@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx - ZAKTUALIZOWANA WERSJA
 'use client';
 
 import { useSession } from 'next-auth/react';
@@ -156,7 +157,22 @@ export default function DashboardPage() {
       {/* Quick actions */}
       <div className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Szybkie akcje</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Link 
+            href="/dashboard/clients/new"
+            className="p-4 border border-gray-200 rounded-lg hover:border-eltron-primary hover:bg-eltron-primary/5 transition-colors group"
+          >
+            <div className="text-center">
+              <div className="text-2xl mb-2">👥</div>
+              <h3 className="font-medium text-gray-900 group-hover:text-eltron-primary">
+                Dodaj klienta
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Nowy klient do bazy
+              </p>
+            </div>
+          </Link>
+
           <Link 
             href="/dashboard/offers/new"
             className="p-4 border border-gray-200 rounded-lg hover:border-eltron-primary hover:bg-eltron-primary/5 transition-colors group"
@@ -167,37 +183,37 @@ export default function DashboardPage() {
                 Utwórz nową ofertę
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                Dodaj produkty i wygeneruj ofertę
+                Wybierz klienta i utwórz ofertę
               </p>
             </div>
           </Link>
 
           <Link 
-            href="/dashboard/offers"
+            href="/dashboard/clients"
             className="p-4 border border-gray-200 rounded-lg hover:border-eltron-primary hover:bg-eltron-primary/5 transition-colors group"
           >
             <div className="text-center">
               <div className="text-2xl mb-2">📋</div>
               <h3 className="font-medium text-gray-900 group-hover:text-eltron-primary">
-                Moje oferty
+                Zarządzaj klientami
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                Przeglądaj i edytuj oferty
+                Przeglądaj bazę klientów
               </p>
             </div>
           </Link>
 
           <Link 
-            href="/dashboard/products"
+            href="/dashboard/offers" 
             className="p-4 border border-gray-200 rounded-lg hover:border-eltron-primary hover:bg-eltron-primary/5 transition-colors group"
           >
             <div className="text-center">
-              <div className="text-2xl mb-2">🛠️</div>
+              <div className="text-2xl mb-2">📄</div>
               <h3 className="font-medium text-gray-900 group-hover:text-eltron-primary">
-                Baza produktów
+                Moje oferty
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                Zarządzaj produktami i cenami
+                Przeglądaj i edytuj oferty
               </p>
             </div>
           </Link>
@@ -266,14 +282,19 @@ export default function DashboardPage() {
         <div className="card text-center py-12">
           <div className="text-4xl mb-4">🎯</div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Zacznij tworzyć oferty!
+            Zacznij od dodania klienta!
           </h3>
           <p className="text-gray-600 mb-6">
-            Nie masz jeszcze żadnych ofert. Utwórz swoją pierwszą ofertę.
+            Dodaj pierwszego klienta, a następnie utwórz dla niego ofertę.
           </p>
-          <Link href="/dashboard/offers/new" className="btn-primary">
-            Utwórz pierwszą ofertę
-          </Link>
+          <div className="flex justify-center space-x-4">
+            <Link href="/dashboard/clients/new" className="btn-primary">
+              Dodaj klienta
+            </Link>
+            <Link href="/dashboard/offers/new" className="btn-secondary">
+              Utwórz ofertę
+            </Link>
+          </div>
         </div>
       )}
     </div>
