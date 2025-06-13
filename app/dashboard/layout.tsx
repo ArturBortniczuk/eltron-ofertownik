@@ -2,22 +2,13 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
+import ClientOnly from '../components/ClientOnly';
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardContent({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [isClient, setIsClient] = useState(false);
-
-  // Napraw hydration - sprawdź czy jesteśmy po stronie klienta
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -25,8 +16,7 @@ export default function DashboardLayout({
     }
   }, [status, router]);
 
-  // Podczas ładowania po stronie serwera - pokaż loading
-  if (!isClient || status === 'loading') {
+  if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-lg">Ładowanie...</div>
@@ -34,7 +24,6 @@ export default function DashboardLayout({
     );
   }
 
-  // Jeśli brak sesji - nie renderuj nic (redirect się wykona)
   if (!session) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -137,5 +126,23 @@ export default function DashboardLayout({
         {children}
       </main>
     </div>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <ClientOnly 
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-lg">Ładowanie...</div>
+        </div>
+      }
+    >
+      <DashboardContent>{children}</DashboardContent>
+    </ClientOnly>
   );
 }
