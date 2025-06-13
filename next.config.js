@@ -7,17 +7,8 @@ const nextConfig = {
   // Wyłącz React Strict Mode
   reactStrictMode: false,
   
-  // Wyłącz SWC minifier który może powodować problemy
-  swcMinify: false,
-  
-  // Webpack config dla bibliotek PDF
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Dodaj externals dla problemowych bibliotek po stronie serwera
-      config.externals = config.externals || {};
-      config.externals['canvas'] = 'canvas';
-    }
-    
+  // Webpack config dla jsPDF
+  webpack: (config, { isServer }) => {    
     // Dodaj fallback dla node modules w browserze
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -26,13 +17,13 @@ const nextConfig = {
       canvas: false,
     };
     
+    // Dodaj alias dla jsPDF
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      jspdf: require.resolve('jspdf/dist/jspdf.node.min.js'),
+    };
+    
     return config;
-  },
-  
-  // Dodaj experimental flags dla lepszej stabilności
-  experimental: {
-    suppressHydrationWarning: true,
-    serverComponentsExternalPackages: ['jspdf', 'jspdf-autotable'],
   },
   
   async redirects() {
