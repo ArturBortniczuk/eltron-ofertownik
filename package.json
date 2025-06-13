@@ -16,7 +16,9 @@
     "pg": "^8.11.3",
     "bcryptjs": "^2.4.3",
     "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2"
+    "jspdf-autotable": "^3.8.2",
+    "pdfkit": "^0.15.0",
+    "@types/pdfkit": "^0.13.4"
   },
   "devDependencies": {
     "@types/node": "^20",
