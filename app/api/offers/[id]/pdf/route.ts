@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
 import { db } from '../../../../../lib/db';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
 export async function GET(
   request: NextRequest,
@@ -397,10 +398,12 @@ export async function GET(
     </html>
     `;
 
-    // Uruchom Puppeteer i wygeneruj PDF
+    // Uruchom Puppeteer z Chromium dla Vercel
     const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless
     });
     
     const page = await browser.newPage();
