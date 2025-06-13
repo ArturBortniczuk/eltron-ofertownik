@@ -1,3 +1,4 @@
+// app/dashboard/layout.tsx - ZAKTUALIZOWANA WERSJA
 'use client';
 
 import { useSession, signOut } from 'next-auth/react';
@@ -54,6 +55,12 @@ export default function DashboardLayout({
                 Dashboard
               </Link>
               <Link 
+                href="/dashboard/clients" 
+                className="text-gray-600 hover:text-eltron-primary transition-colors"
+              >
+                Klienci
+              </Link>
+              <Link 
                 href="/dashboard/offers" 
                 className="text-gray-600 hover:text-eltron-primary transition-colors"
               >
@@ -86,22 +93,28 @@ export default function DashboardLayout({
 
       {/* Mobile navigation */}
       <nav className="md:hidden bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex space-x-4">
+        <div className="flex space-x-4 overflow-x-auto">
           <Link 
             href="/dashboard" 
-            className="text-gray-600 hover:text-eltron-primary text-sm transition-colors"
+            className="text-gray-600 hover:text-eltron-primary text-sm transition-colors whitespace-nowrap"
           >
             Dashboard
           </Link>
           <Link 
+            href="/dashboard/clients" 
+            className="text-gray-600 hover:text-eltron-primary text-sm transition-colors whitespace-nowrap"
+          >
+            Klienci
+          </Link>
+          <Link 
             href="/dashboard/offers" 
-            className="text-gray-600 hover:text-eltron-primary text-sm transition-colors"
+            className="text-gray-600 hover:text-eltron-primary text-sm transition-colors whitespace-nowrap"
           >
             Oferty
           </Link>
           <Link 
             href="/dashboard/offers/new" 
-            className="text-eltron-primary font-medium text-sm"
+            className="text-eltron-primary font-medium text-sm whitespace-nowrap"
           >
             + Nowa
           </Link>
