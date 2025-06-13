@@ -2,7 +2,365 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
 import { db } from '../../../../../lib/db';
-import { chromium } from 'playwright-core';
+import React from 'react';
+import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer';
+
+// Zarejestruj fonty z obsługą polskich znaków
+Font.register({
+  family: 'Roboto',
+  fonts: [
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
+      fontWeight: 300,
+    },
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf',
+      fontWeight: 400,
+    },
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-medium-webfont.ttf',
+      fontWeight: 500,
+    },
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf',
+      fontWeight: 600,
+    },
+  ]
+});
+
+// Style
+const styles = StyleSheet.create({
+  page: {
+    fontFamily: 'Roboto',
+    fontSize: 10,
+    paddingTop: 20,
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingBottom: 20,
+    lineHeight: 1.5,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    backgroundColor: '#3B4A5C',
+    padding: 15,
+    color: 'white',
+  },
+  headerLeft: {
+    flex: 2,
+  },
+  headerRight: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 600,
+    marginBottom: 5,
+  },
+  headerSubtitle: {
+    fontSize: 8,
+    marginBottom: 2,
+  },
+  clientBox: {
+    backgroundColor: '#F8F9FA',
+    border: '2pt solid #E9ECEF',
+    padding: 15,
+    marginBottom: 20,
+  },
+  clientLabel: {
+    fontSize: 9,
+    fontWeight: 600,
+    color: '#3B4A5C',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  clientName: {
+    fontSize: 14,
+    fontWeight: 600,
+    marginBottom: 8,
+    color: '#212529',
+  },
+  clientDetails: {
+    fontSize: 9,
+    marginBottom: 3,
+    color: '#495057',
+  },
+  greeting: {
+    marginBottom: 20,
+    lineHeight: 1.5,
+  },
+  greetingText: {
+    fontSize: 10,
+    marginBottom: 5,
+    color: '#495057',
+  },
+  table: {
+    marginBottom: 20,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#3B4A5C',
+    color: 'white',
+    padding: 8,
+    fontSize: 9,
+    fontWeight: 600,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DEE2E6',
+    padding: 8,
+    fontSize: 9,
+  },
+  tableRowEven: {
+    backgroundColor: '#F8F9FA',
+  },
+  col1: { width: '8%', textAlign: 'center' },
+  col2: { width: '40%', textAlign: 'left' },
+  col3: { width: '12%', textAlign: 'center' },
+  col4: { width: '15%', textAlign: 'right' },
+  col5: { width: '10%', textAlign: 'center' },
+  col6: { width: '15%', textAlign: 'right' },
+  summarySection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 20,
+  },
+  summaryBox: {
+    backgroundColor: '#F8F9FA',
+    border: '2pt solid #E9ECEF',
+    padding: 15,
+    width: '48%',
+  },
+  boxTitle: {
+    fontWeight: 600,
+    color: '#3B4A5C',
+    marginBottom: 10,
+    fontSize: 11,
+    textTransform: 'uppercase',
+  },
+  conditionItem: {
+    fontSize: 9,
+    marginBottom: 5,
+    color: '#495057',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    fontSize: 10,
+  },
+  summaryTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 2,
+    borderTopColor: '#3B4A5C',
+    fontWeight: 600,
+    color: '#3B4A5C',
+    fontSize: 12,
+  },
+  notesSection: {
+    marginTop: 20,
+    backgroundColor: '#F8F9FA',
+    padding: 15,
+    border: '2pt solid #E9ECEF',
+  },
+  notesTitle: {
+    fontWeight: 600,
+    color: '#3B4A5C',
+    marginBottom: 8,
+    fontSize: 11,
+    textTransform: 'uppercase',
+  },
+  notesContent: {
+    fontSize: 9,
+    lineHeight: 1.5,
+    color: '#495057',
+  },
+  footer: {
+    marginTop: 30,
+    paddingTop: 20,
+    borderTopWidth: 2,
+    borderTopColor: '#E9ECEF',
+    fontSize: 9,
+    color: '#6C757D',
+  },
+  footerText: {
+    marginBottom: 3,
+  },
+  footerSignature: {
+    fontWeight: 600,
+    color: '#3B4A5C',
+    marginTop: 10,
+  },
+});
+
+// Komponent PDF
+const OfferPDF = ({ offer, items }: any) => {
+  const offerDate = new Date(offer.created_at).toLocaleDateString('pl-PL');
+  const validDays = parseInt(offer.valid_days) || 30;
+  const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
+  const deliveryDays = parseInt(offer.delivery_days) || 0;
+  const totalNet = parseFloat(offer.total_net) || 0;
+  const totalVat = parseFloat(offer.total_vat) || 0;
+  const totalGross = parseFloat(offer.total_gross) || 0;
+  const additionalCosts = parseFloat(offer.additional_costs) || 0;
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>GRUPA ELTRON</Text>
+            <Text style={styles.headerSubtitle}>ul. Przykładowa 123, 00-000 Warszawa</Text>
+            <Text style={styles.headerSubtitle}>Tel: +48 123 456 789 | Email: kontakt@eltron.pl</Text>
+            <Text style={styles.headerSubtitle}>NIP: 123-456-78-90 | REGON: 123456789</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <Text style={[styles.headerTitle, { fontSize: 16 }]}>
+              OFERTA Nr {offer.id}/{new Date().getFullYear()}
+            </Text>
+            <Text style={styles.headerSubtitle}>Data: {offerDate}</Text>
+            <Text style={styles.headerSubtitle}>Ważna do: {validUntil}</Text>
+          </View>
+        </View>
+
+        {/* Client Box */}
+        <View style={styles.clientBox}>
+          <Text style={styles.clientLabel}>Oferta dla:</Text>
+          <Text style={styles.clientName}>{offer.client_name || ''}</Text>
+          {offer.client_email && (
+            <Text style={styles.clientDetails}>📧 Email: {offer.client_email}</Text>
+          )}
+          {offer.client_phone && (
+            <Text style={styles.clientDetails}>📞 Telefon: {offer.client_phone}</Text>
+          )}
+          {offer.client_nip && (
+            <Text style={styles.clientDetails}>🏢 NIP: {offer.client_nip}</Text>
+          )}
+        </View>
+
+        {/* Greeting */}
+        <View style={styles.greeting}>
+          <Text style={styles.greetingText}>Szanowni Państwo,</Text>
+          <Text style={styles.greetingText}>
+            W odpowiedzi na Państwa zapytanie przesyłamy ofertę na zamówione towary. 
+            Mamy nadzieję, że przedstawione warunki spotkają się z Państwa akceptacją.
+          </Text>
+        </View>
+
+        {/* Table */}
+        <View style={styles.table}>
+          {/* Table Header */}
+          <View style={styles.tableHeader}>
+            <Text style={styles.col1}>Lp.</Text>
+            <Text style={styles.col2}>Nazwa towaru/usługi</Text>
+            <Text style={styles.col3}>Ilość</Text>
+            <Text style={styles.col4}>Cena netto</Text>
+            <Text style={styles.col5}>VAT</Text>
+            <Text style={styles.col6}>Wartość brutto</Text>
+          </View>
+
+          {/* Table Rows */}
+          {items.map((item: any, index: number) => {
+            const quantity = parseFloat(item.quantity) || 0;
+            const unitPrice = parseFloat(item.unit_price) || 0;
+            const vatRate = parseFloat(item.vat_rate) || 0;
+            const grossAmount = parseFloat(item.gross_amount) || 0;
+
+            return (
+              <View 
+                key={index} 
+                style={[styles.tableRow, index % 2 === 1 && styles.tableRowEven]}
+              >
+                <Text style={styles.col1}>{index + 1}</Text>
+                <Text style={styles.col2}>{item.product_name || ''}</Text>
+                <Text style={styles.col3}>{quantity} {item.unit || ''}</Text>
+                <Text style={styles.col4}>{unitPrice.toFixed(2)} zł</Text>
+                <Text style={styles.col5}>{vatRate}%</Text>
+                <Text style={styles.col6}>{grossAmount.toFixed(2)} zł</Text>
+              </View>
+            );
+          })}
+
+          {/* Additional Costs Row */}
+          {additionalCosts > 0 && (
+            <View style={[styles.tableRow, { backgroundColor: '#E3F2FD', borderTopWidth: 2, borderTopColor: '#3B4A5C' }]}>
+              <Text style={styles.col1}></Text>
+              <Text style={styles.col2}>{offer.additional_costs_description || 'Dodatkowe koszty'}</Text>
+              <Text style={styles.col3}>1 usł</Text>
+              <Text style={styles.col4}>{additionalCosts.toFixed(2)} zł</Text>
+              <Text style={styles.col5}>23%</Text>
+              <Text style={styles.col6}>{(additionalCosts * 1.23).toFixed(2)} zł</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Summary Section */}
+        <View style={styles.summarySection}>
+          <View style={styles.summaryBox}>
+            <Text style={styles.boxTitle}>Warunki oferty:</Text>
+            <Text style={styles.conditionItem}>• Czas dostawy: {deliveryDays} dni roboczych</Text>
+            <Text style={styles.conditionItem}>• Ważność oferty: {validDays} dni od daty wystawienia</Text>
+            <Text style={styles.conditionItem}>• Forma płatności: przelew bankowy</Text>
+            <Text style={styles.conditionItem}>• Termin płatności: 14 dni od daty faktury</Text>
+            <Text style={styles.conditionItem}>• Ceny zawierają podatek VAT</Text>
+            <Text style={styles.conditionItem}>• Dostawa na adres klienta</Text>
+          </View>
+
+          <View style={styles.summaryBox}>
+            <Text style={styles.boxTitle}>Podsumowanie finansowe:</Text>
+            <View style={styles.summaryRow}>
+              <Text>Wartość netto:</Text>
+              <Text>{totalNet.toFixed(2)} zł</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text>Podatek VAT:</Text>
+              <Text>{totalVat.toFixed(2)} zł</Text>
+            </View>
+            <View style={styles.summaryTotal}>
+              <Text>RAZEM DO ZAPŁATY:</Text>
+              <Text>{totalGross.toFixed(2)} zł</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Notes */}
+        {offer.notes && (
+          <View style={styles.notesSection}>
+            <Text style={styles.notesTitle}>Dodatkowe uwagi:</Text>
+            <Text style={styles.notesContent}>{offer.notes}</Text>
+          </View>
+        )}
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Kontakt w sprawie realizacji zamówienia:</Text>
+          <Text style={styles.footerText}>📧 Email: {offer.created_by_email || 'kontakt@eltron.pl'}</Text>
+          <Text style={styles.footerText}>📞 Telefon: +48 123 456 789</Text>
+          <Text style={styles.footerText}>🌐 www.eltron.pl</Text>
+          
+          <Text style={[styles.footerText, { marginTop: 15 }]}>
+            Dziękujemy za zainteresowanie naszą ofertą i liczymy na owocną współpracę.
+          </Text>
+          <Text style={styles.footerText}>W przypadku pytań jesteśmy do Państwa dyspozycji.</Text>
+          
+          <View style={{ marginTop: 10 }}>
+            <Text style={styles.footerSignature}>Z poważaniem,</Text>
+            <Text style={styles.footerSignature}>{offer.created_by_name || 'Zespół GRUPA ELTRON'}</Text>
+            <Text style={styles.footerSignature}>GRUPA ELTRON Sp. z o.o.</Text>
+          </View>
+        </View>
+      </Page>
+    </Document>
+  );
+};
 
 export async function GET(
   request: NextRequest,
@@ -43,443 +401,14 @@ export async function GET(
     `, [offerId]);
     const items = itemsResult.rows;
 
-    // Przygotuj dane
-    const offerDate = new Date(offer.created_at).toLocaleDateString('pl-PL');
-    const validDays = parseInt(offer.valid_days) || 30;
-    const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
-    const deliveryDays = parseInt(offer.delivery_days) || 0;
-    const totalNet = parseFloat(offer.total_net) || 0;
-    const totalVat = parseFloat(offer.total_vat) || 0;
-    const totalGross = parseFloat(offer.total_gross) || 0;
-    const additionalCosts = parseFloat(offer.additional_costs) || 0;
-
-    // HTML template z Google Fonts i obsługą polskich znaków
-    const html = `
-    <!DOCTYPE html>
-    <html lang="pl">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        
-        <!-- Google Fonts z obsługą polskich znaków -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&subset=latin,latin-ext&display=swap" rel="stylesheet">
-        
-        <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-            
-            body {
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-                font-size: 12px;
-                line-height: 1.5;
-                color: #000000;
-                background: #ffffff;
-                padding: 20px;
-                -webkit-font-smoothing: antialiased;
-                -moz-osx-font-smoothing: grayscale;
-            }
-            
-            .header {
-                background: #3B4A5C;
-                color: white;
-                padding: 20px;
-                margin-bottom: 25px;
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                border-radius: 8px;
-            }
-            
-            .header-left h1 {
-                font-size: 28px;
-                font-weight: 700;
-                margin-bottom: 8px;
-                letter-spacing: 0.5px;
-            }
-            
-            .header-left p {
-                font-size: 11px;
-                margin: 2px 0;
-                opacity: 0.9;
-            }
-            
-            .header-right {
-                text-align: right;
-            }
-            
-            .header-right h2 {
-                font-size: 20px;
-                font-weight: 600;
-                margin-bottom: 8px;
-            }
-            
-            .header-right p {
-                font-size: 11px;
-                margin: 2px 0;
-                opacity: 0.9;
-            }
-            
-            .client-box {
-                background: #F8F9FA;
-                border: 2px solid #E9ECEF;
-                border-radius: 8px;
-                padding: 20px;
-                margin-bottom: 25px;
-            }
-            
-            .client-label {
-                font-weight: 600;
-                color: #3B4A5C;
-                margin-bottom: 10px;
-                font-size: 12px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            
-            .client-name {
-                font-size: 18px;
-                font-weight: 600;
-                margin-bottom: 10px;
-                color: #212529;
-            }
-            
-            .client-details {
-                font-size: 11px;
-                margin-bottom: 4px;
-                color: #495057;
-            }
-            
-            .greeting {
-                margin-bottom: 25px;
-                line-height: 1.6;
-                font-size: 12px;
-                color: #495057;
-            }
-            
-            .greeting p {
-                margin-bottom: 8px;
-            }
-            
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 25px;
-                border-radius: 8px;
-                overflow: hidden;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            
-            th {
-                background: #3B4A5C;
-                color: white;
-                padding: 12px 8px;
-                text-align: center;
-                font-size: 11px;
-                font-weight: 600;
-                border: none;
-                text-transform: uppercase;
-                letter-spacing: 0.3px;
-            }
-            
-            td {
-                padding: 10px 8px;
-                border: 1px solid #DEE2E6;
-                text-align: center;
-                font-size: 10px;
-                background: white;
-            }
-            
-            tr:nth-child(even) td {
-                background: #F8F9FA;
-            }
-            
-            tr:hover td {
-                background: #E9ECEF;
-            }
-            
-            .text-left {
-                text-align: left !important;
-            }
-            
-            .text-right {
-                text-align: right !important;
-            }
-            
-            .summary-section {
-                display: flex;
-                justify-content: space-between;
-                margin-top: 30px;
-                gap: 25px;
-            }
-            
-            .box {
-                background: #F8F9FA;
-                border: 2px solid #E9ECEF;
-                border-radius: 8px;
-                padding: 20px;
-                width: 48%;
-            }
-            
-            .box-title {
-                font-weight: 600;
-                color: #3B4A5C;
-                margin-bottom: 15px;
-                font-size: 13px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            
-            .condition-item {
-                font-size: 11px;
-                margin-bottom: 8px;
-                color: #495057;
-                padding-left: 5px;
-            }
-            
-            .summary-row {
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 10px;
-                font-size: 12px;
-                color: #495057;
-            }
-            
-            .summary-total {
-                display: flex;
-                justify-content: space-between;
-                margin-top: 15px;
-                padding-top: 15px;
-                border-top: 2px solid #3B4A5C;
-                font-weight: 700;
-                color: #3B4A5C;
-                font-size: 14px;
-            }
-            
-            .notes-section {
-                margin-top: 30px;
-                background: #F8F9FA;
-                border-radius: 8px;
-                padding: 20px;
-                border: 2px solid #E9ECEF;
-            }
-            
-            .notes-title {
-                font-weight: 600;
-                color: #3B4A5C;
-                margin-bottom: 10px;
-                font-size: 13px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            
-            .notes-content {
-                font-size: 11px;
-                line-height: 1.6;
-                color: #495057;
-                white-space: pre-line;
-            }
-            
-            .footer {
-                margin-top: 40px;
-                padding-top: 25px;
-                border-top: 2px solid #E9ECEF;
-                font-size: 11px;
-                color: #6C757D;
-                line-height: 1.6;
-            }
-            
-            .footer p {
-                margin-bottom: 5px;
-            }
-            
-            .footer-signature {
-                font-weight: 600;
-                color: #3B4A5C;
-                margin-top: 10px;
-            }
-            
-            .additional-costs-row {
-                border-top: 3px solid #3B4A5C !important;
-                background: #E3F2FD !important;
-            }
-            
-            .additional-costs-row td {
-                background: #E3F2FD !important;
-                font-weight: 600;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <div class="header-left">
-                <h1>GRUPA ELTRON</h1>
-                <p>ul. Przykładowa 123, 00-000 Warszawa</p>
-                <p>Tel: +48 123 456 789 | Email: kontakt@eltron.pl</p>
-                <p>NIP: 123-456-78-90 | REGON: 123456789</p>
-            </div>
-            <div class="header-right">
-                <h2>OFERTA Nr ${offer.id}/${new Date().getFullYear()}</h2>
-                <p>Data: ${offerDate}</p>
-                <p>Ważna do: ${validUntil}</p>
-            </div>
-        </div>
-
-        <div class="client-box">
-            <div class="client-label">Oferta dla:</div>
-            <div class="client-name">${offer.client_name || ''}</div>
-            ${offer.client_email ? `<div class="client-details">📧 Email: ${offer.client_email}</div>` : ''}
-            ${offer.client_phone ? `<div class="client-details">📞 Telefon: ${offer.client_phone}</div>` : ''}
-            ${offer.client_nip ? `<div class="client-details">🏢 NIP: ${offer.client_nip}</div>` : ''}
-        </div>
-
-        <div class="greeting">
-            <p>Szanowni Państwo,</p>
-            <p>W odpowiedzi na Państwa zapytanie przesyłamy ofertę na zamówione towary. Mamy nadzieję, że przedstawione warunki spotkają się z Państwa akceptacją.</p>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 8%">Lp.</th>
-                    <th style="width: 40%">Nazwa towaru/usługi</th>
-                    <th style="width: 12%">Ilość</th>
-                    <th style="width: 15%">Cena netto</th>
-                    <th style="width: 10%">VAT</th>
-                    <th style="width: 15%">Wartość brutto</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${items.map((item, index) => {
-                    const quantity = parseFloat(item.quantity) || 0;
-                    const unitPrice = parseFloat(item.unit_price) || 0;
-                    const vatRate = parseFloat(item.vat_rate) || 0;
-                    const grossAmount = parseFloat(item.gross_amount) || 0;
-                    
-                    return `
-                    <tr>
-                        <td>${index + 1}</td>
-                        <td class="text-left">${item.product_name || ''}</td>
-                        <td>${quantity} ${item.unit || ''}</td>
-                        <td class="text-right">${unitPrice.toFixed(2)} zł</td>
-                        <td>${vatRate}%</td>
-                        <td class="text-right">${grossAmount.toFixed(2)} zł</td>
-                    </tr>
-                    `;
-                }).join('')}
-                
-                ${additionalCosts > 0 ? `
-                <tr class="additional-costs-row">
-                    <td></td>
-                    <td class="text-left">${offer.additional_costs_description || 'Dodatkowe koszty'}</td>
-                    <td>1 usł</td>
-                    <td class="text-right">${additionalCosts.toFixed(2)} zł</td>
-                    <td>23%</td>
-                    <td class="text-right">${(additionalCosts * 1.23).toFixed(2)} zł</td>
-                </tr>
-                ` : ''}
-            </tbody>
-        </table>
-
-        <div class="summary-section">
-            <div class="box">
-                <div class="box-title">Warunki oferty:</div>
-                <div class="condition-item">• Czas dostawy: ${deliveryDays} dni roboczych</div>
-                <div class="condition-item">• Ważność oferty: ${validDays} dni od daty wystawienia</div>
-                <div class="condition-item">• Forma płatności: przelew bankowy</div>
-                <div class="condition-item">• Termin płatności: 14 dni od daty faktury</div>
-                <div class="condition-item">• Ceny zawierają podatek VAT</div>
-                <div class="condition-item">• Dostawa na adres klienta</div>
-            </div>
-
-            <div class="box">
-                <div class="box-title">Podsumowanie finansowe:</div>
-                <div class="summary-row">
-                    <span>Wartość netto:</span>
-                    <span>${totalNet.toFixed(2)} zł</span>
-                </div>
-                <div class="summary-row">
-                    <span>Podatek VAT:</span>
-                    <span>${totalVat.toFixed(2)} zł</span>
-                </div>
-                <div class="summary-total">
-                    <span>RAZEM DO ZAPŁATY:</span>
-                    <span>${totalGross.toFixed(2)} zł</span>
-                </div>
-            </div>
-        </div>
-
-        ${offer.notes ? `
-        <div class="notes-section">
-            <div class="notes-title">Dodatkowe uwagi:</div>
-            <div class="notes-content">${offer.notes}</div>
-        </div>
-        ` : ''}
-
-        <div class="footer">
-            <p><strong>Kontakt w sprawie realizacji zamówienia:</strong></p>
-            <p>📧 Email: ${offer.created_by_email || 'kontakt@eltron.pl'}</p>
-            <p>📞 Telefon: +48 123 456 789</p>
-            <p>🌐 www.eltron.pl</p>
-            
-            <div style="margin-top: 20px;">
-                <p>Dziękujemy za zainteresowanie naszą ofertą i liczymy na owocną współpracę.</p>
-                <p>W przypadku pytań jesteśmy do Państwa dyspozycji.</p>
-            </div>
-            
-            <div class="footer-signature">
-                <p>Z poważaniem,</p>
-                <p>${offer.created_by_name || 'Zespół GRUPA ELTRON'}</p>
-                <p>GRUPA ELTRON Sp. z o.o.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    `;
-
-    // Uruchom Playwright z dodatkowymi opcjami dla fontów
-    const browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
-      ]
-    });
-    
-    const page = await browser.newPage();
-    
-    // Ustaw dodatkowe opcje dla lepszego renderowania fontów
-    await page.setViewportSize({ width: 1200, height: 1600 });
-    await page.setContent(html, { waitUntil: 'networkidle' });
-    
-    // Poczekaj na załadowanie fontów
-    await page.waitForTimeout(1000);
-    
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { 
-        top: '15mm', 
-        right: '15mm', 
-        bottom: '15mm', 
-        left: '15mm' 
-      },
-      preferCSSPageSize: true
-    });
-    
-    await browser.close();
+    // Generuj PDF z React PDF
+    const pdfDoc = <OfferPDF offer={offer} items={items} />;
+    const pdfBuffer = await pdf(pdfDoc).toBuffer();
 
     // Zwróć PDF z prawidłową nazwą pliku
-    const clientName = String(offer.client_name || 'Klient').replace(/[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s]/g, '').replace(/\s+/g, '_');
+    const clientName = String(offer.client_name || 'Klient')
+      .replace(/[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s]/g, '')
+      .replace(/\s+/g, '_');
     const fileName = `Oferta_${offer.id}_${clientName}.pdf`;
 
     return new NextResponse(pdfBuffer, {
