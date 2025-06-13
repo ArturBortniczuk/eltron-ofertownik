@@ -17,3 +17,12 @@ declare module "next-auth" {
     image?: string | null
   }
 }
+
+// Dodaj typy dla jsPDF
+declare module "jspdf" {
+  interface jsPDF {
+    lastAutoTable?: {
+      finalY: number;
+    };
+  }
+}
