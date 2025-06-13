@@ -1,9 +1,8 @@
-// app/dashboard/layout.tsx - ZAKTUALIZOWANA WERSJA
 'use client';
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 export default function DashboardLayout({
@@ -13,6 +12,12 @@ export default function DashboardLayout({
 }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
+
+  // Napraw hydration - sprawdź czy jesteśmy po stronie klienta
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -20,16 +25,22 @@ export default function DashboardLayout({
     }
   }, [status, router]);
 
-  if (status === 'loading') {
+  // Podczas ładowania po stronie serwera - pokaż loading
+  if (!isClient || status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-lg">Ładowanie...</div>
       </div>
     );
   }
 
+  // Jeśli brak sesji - nie renderuj nic (redirect się wykona)
   if (!session) {
-    return null;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-lg">Przekierowanie...</div>
+      </div>
+    );
   }
 
   return (
@@ -78,7 +89,7 @@ export default function DashboardLayout({
               <div className="text-sm">
                 <span className="text-gray-600">Zalogowany jako:</span>
                 <br />
-                <span className="font-medium">{session.user?.name}</span>
+                <span className="font-medium">{session.user?.name || 'Użytkownik'}</span>
               </div>
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
