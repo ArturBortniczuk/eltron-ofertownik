@@ -145,7 +145,7 @@ export default function NewOfferPage() {
   const handleProductNameChange = (value: string) => {
     setCurrentItem(prev => ({ ...prev, product_name: value }));
     
-    // Wyszukaj od razu po każdej zmianie
+    // Wyszukaj produkty jeśli jest co najmniej 2 znaki
     if (value.length >= 2) {
       searchProducts(value);
     } else {
@@ -160,7 +160,6 @@ export default function NewOfferPage() {
       unit: product.unit,
       unit_price: product.last_price
     }));
-    setProductSuggestions([]);
     calculateAmounts({ 
       ...currentItem, 
       product_name: product.name, 
@@ -444,7 +443,7 @@ export default function NewOfferPage() {
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Dodaj pozycję</h2>
               
               <div className="space-y-4">
-                <div className="relative">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Nazwa produktu *
                   </label>
@@ -455,70 +454,6 @@ export default function NewOfferPage() {
                     className="input-field"
                     placeholder="Zacznij pisać nazwę produktu..."
                   />
-                  
-                  {/* Podpowiedzi produktów z historii ofert - zawsze widoczne gdy są dane */}
-                  {productSuggestions.length > 0 && currentItem.product_name.length >= 2 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-y-auto">
-                      {productSuggestions.map((product, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault(); // Zapobiega zamknięciu przed kliknięciem
-                            selectProduct(product);
-                          }}
-                          className="w-full text-left px-4 py-4 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-900 mb-1">{product.name}</div>
-                              <div className="text-sm text-gray-600 mb-2">
-                                Jednostka: <span className="font-medium">{product.unit}</span>
-                              </div>
-                              
-                              <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
-                                <div>
-                                  <div className="font-medium text-gray-700">Ostatnia cena:</div>
-                                  <div className="text-eltron-primary font-bold">
-                                    {product.last_price.toFixed(2)} zł/{product.unit}
-                                  </div>
-                                  <div>przez {product.last_used_by}</div>
-                                  <div>{new Date(product.last_used_at).toLocaleDateString('pl-PL')}</div>
-                                </div>
-                                
-                                <div>
-                                  <div className="font-medium text-gray-700">Statystyki:</div>
-                                  <div>Użyto: <span className="font-medium">{product.usage_count}x</span></div>
-                                  <div>Średnia: <span className="font-medium">{product.avg_price.toFixed(2)} zł</span></div>
-                                  <div className="text-xs">
-                                    {product.min_price.toFixed(2)} - {product.max_price.toFixed(2)} zł
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="ml-4 text-right">
-                              <div className="text-xs text-gray-500 mb-1">Kliknij aby dodać</div>
-                              <div className="bg-eltron-primary/10 text-eltron-primary px-2 py-1 rounded text-xs font-medium">
-                                Użyj
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Komunikat gdy brak wyników */}
-                  {currentItem.product_name.length >= 2 && productSuggestions.length === 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-                      <div className="px-4 py-8 text-center text-gray-500">
-                        <div className="text-lg mb-2">🔍</div>
-                        <div>Nie znaleziono produktów w historii ofert</div>
-                        <div className="text-sm mt-1">Wpisz pełną nazwę produktu aby go dodać</div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -613,6 +548,96 @@ export default function NewOfferPage() {
                 )}
               </div>
             </div>
+
+            {/* Historia produktów - nowa tabela */}
+            {currentItem.product_name.length >= 2 && (
+              <div className="card">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Historia produktów ({productSuggestions.length})
+                  </h2>
+                  {currentItem.product_name && (
+                    <div className="text-sm text-gray-600">
+                      Wyszukiwanie: "<span className="font-medium">{currentItem.product_name}</span>"
+                    </div>
+                  )}
+                </div>
+                
+                {productSuggestions.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-2 font-medium text-gray-700">Nazwa produktu</th>
+                          <th className="text-left py-3 px-2 font-medium text-gray-700">Jedn.</th>
+                          <th className="text-left py-3 px-2 font-medium text-gray-700">Ostatnia cena</th>
+                          <th className="text-left py-3 px-2 font-medium text-gray-700">Używane</th>
+                          <th className="text-left py-3 px-2 font-medium text-gray-700">Ceny (min-max)</th>
+                          <th className="text-left py-3 px-2 font-medium text-gray-700">Ostatnio</th>
+                          <th className="text-left py-3 px-2 font-medium text-gray-700">Akcja</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {productSuggestions.map((product, index) => (
+                          <tr key={index} className="table-row">
+                            <td className="py-3 px-2">
+                              <div className="font-medium text-gray-900">{product.name}</div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <span className="text-sm bg-gray-100 px-2 py-1 rounded">{product.unit}</span>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="font-bold text-eltron-primary">
+                                {product.last_price.toFixed(2)} zł
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                śr. {product.avg_price.toFixed(2)} zł
+                              </div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                                {product.usage_count}x
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 text-sm text-gray-600">
+                              {product.min_price.toFixed(2)} - {product.max_price.toFixed(2)} zł
+                            </td>
+                            <td className="py-3 px-2 text-sm text-gray-600">
+                              <div>{product.last_used_by}</div>
+                              <div className="text-xs">
+                                {new Date(product.last_used_at).toLocaleDateString('pl-PL')}
+                              </div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <button
+                                type="button"
+                                onClick={() => selectProduct(product)}
+                                className="bg-eltron-primary text-white px-3 py-1 rounded text-sm font-medium hover:bg-eltron-primary/90 transition-colors"
+                              >
+                                Użyj
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <div className="text-4xl mb-4">🔍</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Nie znaleziono produktów w historii ofert
+                    </h3>
+                    <p className="text-gray-600">
+                      Brak produktów pasujących do frazy "<span className="font-medium">{currentItem.product_name}</span>"
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Możesz wpisać pełną nazwę produktu i dodać go ręcznie
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Lista dodanych pozycji */}
             {items.length > 0 && (
