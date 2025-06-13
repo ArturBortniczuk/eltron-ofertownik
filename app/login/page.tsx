@@ -1,16 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { signIn, getSession } from 'next-auth/react';
+import { useState, useEffect } from 'react';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const router = useRouter();
+
+  // Napraw hydration
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +40,15 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Podczas ładowania po stronie serwera
+  if (!isClient) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-eltron-primary via-gray-100 to-eltron-light">
+        <div className="text-lg">Ładowanie...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-eltron-primary via-gray-100 to-eltron-light">
