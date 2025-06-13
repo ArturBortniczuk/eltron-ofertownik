@@ -1,4 +1,4 @@
-// app/dashboard/offers/new/page.tsx - ZAKTUALIZOWANA WERSJA z historią ofert
+// app/dashboard/offers/new/page.tsx - KOMPLETNA POPRAWIONA WERSJA
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -74,7 +74,6 @@ export default function NewOfferPage() {
   
   // Podpowiedzi produktów
   const [productSuggestions, setProductSuggestions] = useState<ProductSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   
   // Stan UI
   const [saving, setSaving] = useState(false);
@@ -129,7 +128,6 @@ export default function NewOfferPage() {
   const searchProducts = async (query: string) => {
     if (query.length < 2) {
       setProductSuggestions([]);
-      setShowSuggestions(false);
       return;
     }
 
@@ -138,7 +136,6 @@ export default function NewOfferPage() {
       if (response.ok) {
         const suggestions = await response.json();
         setProductSuggestions(suggestions);
-        setShowSuggestions(true);
       }
     } catch (error) {
       console.error('Error searching products:', error);
@@ -147,7 +144,13 @@ export default function NewOfferPage() {
 
   const handleProductNameChange = (value: string) => {
     setCurrentItem(prev => ({ ...prev, product_name: value }));
-    searchProducts(value);
+    
+    // Wyszukaj od razu po każdej zmianie
+    if (value.length >= 2) {
+      searchProducts(value);
+    } else {
+      setProductSuggestions([]);
+    }
   };
 
   const selectProduct = (product: ProductSuggestion) => {
@@ -157,7 +160,7 @@ export default function NewOfferPage() {
       unit: product.unit,
       unit_price: product.last_price
     }));
-    setShowSuggestions(false);
+    setProductSuggestions([]);
     calculateAmounts({ 
       ...currentItem, 
       product_name: product.name, 
@@ -210,7 +213,7 @@ export default function NewOfferPage() {
       gross_amount: 0
     });
     setError('');
-    setShowSuggestions(false);
+    setProductSuggestions([]);
   };
 
   const removeItem = (index: number) => {
@@ -451,18 +454,19 @@ export default function NewOfferPage() {
                     onChange={(e) => handleProductNameChange(e.target.value)}
                     className="input-field"
                     placeholder="Zacznij pisać nazwę produktu..."
-                    onFocus={() => currentItem.product_name.length >= 2 && setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   />
                   
-                  {/* Podpowiedzi produktów z historii ofert */}
-                  {showSuggestions && productSuggestions.length > 0 && (
+                  {/* Podpowiedzi produktów z historii ofert - zawsze widoczne gdy są dane */}
+                  {productSuggestions.length > 0 && currentItem.product_name.length >= 2 && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-y-auto">
                       {productSuggestions.map((product, index) => (
                         <button
                           key={index}
                           type="button"
-                          onClick={() => selectProduct(product)}
+                          onMouseDown={(e) => {
+                            e.preventDefault(); // Zapobiega zamknięciu przed kliknięciem
+                            selectProduct(product);
+                          }}
                           className="w-full text-left px-4 py-4 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                         >
                           <div className="flex justify-between items-start">
@@ -505,7 +509,8 @@ export default function NewOfferPage() {
                     </div>
                   )}
 
-                  {showSuggestions && productSuggestions.length === 0 && currentItem.product_name.length >= 2 && (
+                  {/* Komunikat gdy brak wyników */}
+                  {currentItem.product_name.length >= 2 && productSuggestions.length === 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
                       <div className="px-4 py-8 text-center text-gray-500">
                         <div className="text-lg mb-2">🔍</div>
