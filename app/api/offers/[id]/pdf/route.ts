@@ -246,9 +246,9 @@ export async function GET(
 
   } catch (error) {
     console.error('💥 PDF generation error:', error);
-    console.error('💥 Error stack:', error.stack);
+    console.error('💥 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { error: 'Błąd generowania PDF: ' + error.message },
+      { error: 'Błąd generowania PDF: ' + (error instanceof Error ? error.message : 'Nieznany błąd') },
       { status: 500 }
     );
   }
