@@ -7,43 +7,6 @@ import { db } from '../../../../../lib/db';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Funkcja pomocnicza do konwersji polskich znaków
-function convertPolishChars(text: string): string {
-  if (!text) return '';
-  
-  const polishChars: Record<string, string> = {
-    'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 
-    'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
-    'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N', 
-    'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z'
-  };
-  
-  return text.split('').map(char => polishChars[char] || char).join('');
-}
-
-// Funkcja do bezpiecznego dodawania tekstu z polskimi znakami
-function addPolishText(
-  doc: jsPDF, 
-  text: string, 
-  x: number, 
-  y: number, 
-  options: any = {}
-): void {
-  try {
-    if (!text) text = '';
-    
-    // Konwertuj polskie znaki
-    const convertedText = convertPolishChars(String(text));
-    
-    // Usuń charSpace - może powoduje problemy
-    doc.text(convertedText, x, y, options);
-  } catch (error) {
-    console.error('Error adding Polish text:', text, error);
-    // Fallback - dodaj tekst bez konwersji
-    doc.text(String(text || ''), x, y, options);
-  }
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -83,18 +46,77 @@ export async function GET(
     `, [offerId]);
     const items = itemsResult.rows;
 
-    // Stwórz nowy dokument PDF
-    const doc = new jsPDF();
+    // Stwórz nowy dokument PDF z UTF-8
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    
     const pageWidth = doc.internal.pageSize.width;
     
-    // Dodaj metadane PDF
+    // KRYTYCZNE: Ustaw kodowanie UTF-8
+    (doc as any).setCharSpace = function(space: number) {
+      this.internal.write('BT');
+      this.internal.write(space + ' Tc');
+      this.internal.write('ET');
+    };
+
+    // Funkcja do bezpiecznego dodawania tekstu z polskimi znakami
+    function addText(text: string, x: number, y: number, options: any = {}) {
+      if (!text) text = '';
+      
+      try {
+        // Konwertuj do UTF-8 przez encoder
+        const utf8Text = decodeURIComponent(encodeURIComponent(String(text)));
+        doc.text(utf8Text, x, y, options);
+      } catch (error) {
+        // Fallback - użyj podstawowej konwersji
+        const simpleConversion = String(text)
+          .replace(/ą/g, 'a').replace(/Ą/g, 'A')
+          .replace(/ć/g, 'c').replace(/Ć/g, 'C')
+          .replace(/ę/g, 'e').replace(/Ę/g, 'E')
+          .replace(/ł/g, 'l').replace(/Ł/g, 'L')
+          .replace(/ń/g, 'n').replace(/Ń/g, 'N')
+          .replace(/ó/g, 'o').replace(/Ó/g, 'O')
+          .replace(/ś/g, 's').replace(/Ś/g, 'S')
+          .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
+          .replace(/ż/g, 'z').replace(/Ż/g, 'Z');
+        
+        doc.text(simpleConversion, x, y, options);
+      }
+    }
+
+    // Funkcja do konwersji tekstu dla tabel
+    function convertText(text: string): string {
+      if (!text) return '';
+      
+      try {
+        // Spróbuj zachować UTF-8
+        return decodeURIComponent(encodeURIComponent(String(text)));
+      } catch (error) {
+        // Fallback
+        return String(text)
+          .replace(/ą/g, 'a').replace(/Ą/g, 'A')
+          .replace(/ć/g, 'c').replace(/Ć/g, 'C')
+          .replace(/ę/g, 'e').replace(/Ę/g, 'E')
+          .replace(/ł/g, 'l').replace(/Ł/g, 'L')
+          .replace(/ń/g, 'n').replace(/Ń/g, 'N')
+          .replace(/ó/g, 'o').replace(/Ó/g, 'O')
+          .replace(/ś/g, 's').replace(/Ś/g, 'S')
+          .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
+          .replace(/ż/g, 'z').replace(/Ż/g, 'Z');
+      }
+    }
+    
+    // Dodaj metadane PDF z UTF-8
     doc.setProperties({
       title: `Oferta ${offer.id}`,
-      creator: 'Grupa Eltron'
+      creator: 'Grupa Eltron',
+      subject: 'Oferta handlowa'
     });
     
     // === HEADER Z LOGO I ADRESEM ===
-    // Tło header
     doc.setFillColor(59, 74, 92);
     doc.rect(0, 0, pageWidth, 45, 'F');
     
@@ -102,20 +124,20 @@ export async function GET(
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    addPolishText(doc, 'GRUPA ELTRON', 15, 20);
+    addText('GRUPA ELTRON', 15, 20);
     
-    // Adres firmy (biały tekst)
+    // Adres firmy
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    addPolishText(doc, 'ul. Przykladowa 123, 00-000 Warszawa', 15, 30);
-    addPolishText(doc, 'Tel: +48 123 456 789 | Email: kontakt@eltron.pl', 15, 37);
+    addText('ul. Przykladowa 123, 00-000 Warszawa', 15, 30);
+    addText('Tel: +48 123 456 789 | Email: kontakt@eltron.pl', 15, 37);
 
-    // === TYTUŁ OFERTY (po prawej w header) ===
+    // === TYTUŁ OFERTY ===
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     const offerTitle = `OFERTA Nr ${offer.id}/${new Date().getFullYear()}`;
-    const titleWidth = doc.getTextWidth(convertPolishChars(offerTitle));
-    addPolishText(doc, offerTitle, pageWidth - titleWidth - 15, 20);
+    const titleWidth = doc.getTextWidth(offerTitle);
+    addText(offerTitle, pageWidth - titleWidth - 15, 20);
     
     // Data oferty
     doc.setFontSize(9);
@@ -126,45 +148,40 @@ export async function GET(
     
     const dateText = `Data: ${offerDate}`;
     const validText = `Wazna do: ${validUntil}`;
-    addPolishText(doc, dateText, pageWidth - doc.getTextWidth(convertPolishChars(dateText)) - 15, 30);
-    addPolishText(doc, validText, pageWidth - doc.getTextWidth(convertPolishChars(validText)) - 15, 37);
+    addText(dateText, pageWidth - doc.getTextWidth(dateText) - 15, 30);
+    addText(validText, pageWidth - doc.getTextWidth(validText) - 15, 37);
 
-    // === DANE KLIENTA W RAMCE ===
+    // === DANE KLIENTA ===
     let yPos = 55;
     
-    // Ramka dla klienta
     doc.setDrawColor(200, 200, 200);
     doc.setFillColor(248, 249, 250);
     doc.roundedRect(15, yPos, pageWidth - 30, 40, 2, 2, 'FD');
     
-    // Nagłówek "Dla:"
     doc.setTextColor(59, 74, 92);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    addPolishText(doc, 'DLA:', 20, yPos + 10);
+    addText('DLA:', 20, yPos + 10);
     
-    // Dane klienta
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    addPolishText(doc, String(offer.client_name || ''), 20, yPos + 20);
+    addText(String(offer.client_name || ''), 20, yPos + 20);
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     let clientYPos = yPos + 28;
     
-    // Email i NIP w pierwszym wierszu
     if (offer.client_email) {
-      addPolishText(doc, `Email: ${offer.client_email}`, 20, clientYPos);
+      addText(`Email: ${offer.client_email}`, 20, clientYPos);
     }
     if (offer.client_nip) {
-      addPolishText(doc, `NIP: ${offer.client_nip}`, 120, clientYPos);
+      addText(`NIP: ${offer.client_nip}`, 120, clientYPos);
     }
     
-    // Telefon w drugim wierszu
     if (offer.client_phone) {
       clientYPos += 7;
-      addPolishText(doc, `Tel: ${offer.client_phone}`, 20, clientYPos);
+      addText(`Tel: ${offer.client_phone}`, 20, clientYPos);
     }
 
     // === POWITANIE ===
@@ -172,13 +189,13 @@ export async function GET(
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    addPolishText(doc, 'Dzien dobry,', 15, yPos);
-    addPolishText(doc, 'Przesylam oferte na zamowione towary zgodnie z Panstwa zapytaniem.', 15, yPos + 8);
+    addText('Dzien dobry,', 15, yPos);
+    addText('Przesylam oferte na zamowione towary zgodnie z Panstwa zapytaniem.', 15, yPos + 8);
 
     // === TABELA Z POZYCJAMI ===
     yPos = 130;
     
-    // Przygotuj dane do tabeli z konwersją polskich znaków
+    // Przygotuj dane do tabeli
     const tableData = items.map((item, index) => {
       const quantity = parseFloat(item.quantity) || 0;
       const unitPrice = parseFloat(item.unit_price) || 0;
@@ -187,7 +204,7 @@ export async function GET(
       
       return [
         String(index + 1),
-        convertPolishChars(String(item.product_name || '')),
+        convertText(String(item.product_name || '')),
         `${quantity} ${item.unit || ''}`,
         `${unitPrice.toFixed(2)} zl`,
         `${vatRate}%`,
@@ -195,13 +212,13 @@ export async function GET(
       ];
     });
 
-    // Dodaj dodatkowe koszty jeśli istnieją
+    // Dodaj dodatkowe koszty
     const additionalCosts = parseFloat(offer.additional_costs) || 0;
     if (additionalCosts > 0) {
       const additionalGross = additionalCosts * 1.23;
       tableData.push([
         '',
-        convertPolishChars(String(offer.additional_costs_description || 'Dodatkowe koszty')),
+        convertText(String(offer.additional_costs_description || 'Dodatkowe koszty')),
         '1 usl',
         `${additionalCosts.toFixed(2)} zl`,
         '23%',
@@ -209,16 +226,16 @@ export async function GET(
       ]);
     }
 
-    // Stwórz tabelę - ZMNIEJSZONA SZEROKOŚĆ, wyrównana do marginesów
+    // Stwórz tabelę z lepszym obsługiwaniem UTF-8
     autoTable(doc, {
       startY: yPos,
       head: [[
         'Lp.', 
-        convertPolishChars('Nazwa towaru/uslugi'), 
-        convertPolishChars('Ilosc'), 
+        convertText('Nazwa towaru/uslugi'), 
+        convertText('Ilosc'), 
         'Cena netto', 
         'VAT', 
-        convertPolishChars('Wartosc brutto')
+        convertText('Wartosc brutto')
       ]],
       body: tableData,
       theme: 'striped',
@@ -250,17 +267,23 @@ export async function GET(
         fontSize: 9
       },
       tableWidth: 175,
-      margin: { left: 15, right: 15 }
+      margin: { left: 15, right: 15 },
+      // Dodaj obsługę UTF-8 dla autoTable
+      didParseCell: function(data) {
+        if (data.cell.text && Array.isArray(data.cell.text)) {
+          data.cell.text = data.cell.text.map(text => convertText(text));
+        }
+      }
     });
 
-    // === PODSUMOWANIE I WARUNKI OBOK SIEBIE ===
+    // === PODSUMOWANIE I WARUNKI ===
     yPos = (doc as any).lastAutoTable.finalY + 15;
     
     const totalNet = parseFloat(offer.total_net) || 0;
     const totalVat = parseFloat(offer.total_vat) || 0;
     const totalGross = parseFloat(offer.total_gross) || 0;
 
-    // LEWA STRONA - WARUNKI OFERTY
+    // WARUNKI OFERTY
     const leftBoxWidth = 90;
     const leftBoxX = 15;
     
@@ -271,13 +294,12 @@ export async function GET(
     doc.setTextColor(59, 74, 92);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    addPolishText(doc, 'WARUNKI OFERTY:', leftBoxX + 5, yPos + 10);
+    addText('WARUNKI OFERTY:', leftBoxX + 5, yPos + 10);
     
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
     const deliveryDays = parseInt(offer.delivery_days) || 0;
-    // validDays już jest zdefiniowane wyżej, więc nie definiujemy ponownie
     
     const conditions = [
       `• Czas dostawy: ${deliveryDays} dni roboczych`,
@@ -287,10 +309,10 @@ export async function GET(
     ];
     
     conditions.forEach((condition, index) => {
-      addPolishText(doc, condition, leftBoxX + 5, yPos + 18 + (index * 7));
+      addText(condition, leftBoxX + 5, yPos + 18 + (index * 7));
     });
 
-    // PRAWA STRONA - PODSUMOWANIE
+    // PODSUMOWANIE
     const rightBoxWidth = 80;
     const rightBoxX = pageWidth - rightBoxWidth - 15;
     
@@ -298,48 +320,44 @@ export async function GET(
     doc.setDrawColor(200, 200, 200);
     doc.roundedRect(rightBoxX, yPos, rightBoxWidth, 35, 2, 2, 'FD');
 
-    // Podsumowanie
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    addPolishText(doc, 'Wartosc netto:', rightBoxX + 5, yPos + 10);
-    addPolishText(doc, `${totalNet.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 10, { align: 'right' });
+    addText('Wartosc netto:', rightBoxX + 5, yPos + 10);
+    addText(`${totalNet.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 10, { align: 'right' });
     
-    addPolishText(doc, 'VAT:', rightBoxX + 5, yPos + 18);
-    addPolishText(doc, `${totalVat.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 18, { align: 'right' });
+    addText('VAT:', rightBoxX + 5, yPos + 18);
+    addText(`${totalVat.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 18, { align: 'right' });
     
-    // Linia separująca
     doc.setDrawColor(59, 74, 92);
     doc.setLineWidth(0.5);
     doc.line(rightBoxX + 5, yPos + 22, rightBoxX + rightBoxWidth - 5, yPos + 22);
 
-    // RAZEM - większa czcionka
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(59, 74, 92);
-    addPolishText(doc, 'RAZEM DO ZAPLATY:', rightBoxX + 5, yPos + 30);
-    addPolishText(doc, `${totalGross.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 30, { align: 'right' });
+    addText('RAZEM DO ZAPLATY:', rightBoxX + 5, yPos + 30);
+    addText(`${totalGross.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 30, { align: 'right' });
 
-    // === UWAGI (jeśli istnieją) ===
+    // === UWAGI ===
     if (offer.notes) {
-      yPos += 60; // Zwiększony odstęp bo teraz mamy dwie ramki
+      yPos += 60;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      addPolishText(doc, 'UWAGI:', 15, yPos);
+      addText('UWAGI:', 15, yPos);
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      const convertedNotes = convertPolishChars(String(offer.notes));
+      const convertedNotes = convertText(String(offer.notes));
       const noteLines = doc.splitTextToSize(convertedNotes, pageWidth - 30);
       doc.text(noteLines, 15, yPos + 8);
       yPos += noteLines.length * 5 + 8;
     }
 
     // === STOPKA ===
-    yPos = Math.max(yPos + 60, 260); // Zwiększony odstęp
+    yPos = Math.max(yPos + 60, 260);
     
-    // Linia separująca
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.5);
     doc.line(15, yPos, pageWidth - 15, yPos);
@@ -349,31 +367,31 @@ export async function GET(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     
-    addPolishText(doc, 'W celu realizacji zamowienia prosze o kontakt:', 15, yPos);
-    addPolishText(doc, `Email: ${offer.created_by_email || ''} | Tel: +48 123 456 789`, 15, yPos + 6);
+    addText('W celu realizacji zamowienia prosze o kontakt:', 15, yPos);
+    addText(`Email: ${offer.created_by_email || ''} | Tel: +48 123 456 789`, 15, yPos + 6);
     
     yPos += 15;
-    addPolishText(doc, 'Dziekujemy za zainteresowanie nasza oferta.', 15, yPos);
-    addPolishText(doc, 'Pozdrawiamy,', 15, yPos + 6);
+    addText('Dziekujemy za zainteresowanie nasza oferta.', 15, yPos);
+    addText('Pozdrawiamy,', 15, yPos + 6);
     
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(59, 74, 92);
-    addPolishText(doc, `${offer.created_by_name || ''} | GRUPA ELTRON`, 15, yPos + 12);
+    addText(`${offer.created_by_name || ''} | GRUPA ELTRON`, 15, yPos + 12);
 
-    // Generuj PDF jako buffer
+    // Generuj PDF z właściwym kodowaniem
     const pdfBuffer = doc.output('arraybuffer');
 
-    // Zwróć PDF
+    // Zwróć PDF z UTF-8 header
     return new NextResponse(pdfBuffer, {
       headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Oferta_${offer.id}_${String(offer.client_name || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`
+        'Content-Type': 'application/pdf; charset=utf-8',
+        'Content-Disposition': `attachment; filename="Oferta_${offer.id}_${String(offer.client_name || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`,
+        'Cache-Control': 'no-cache'
       }
     });
 
   } catch (error) {
-    console.error('💥 PDF generation error:', error);
-    console.error('💥 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('PDF generation error:', error);
     return NextResponse.json(
       { error: 'Błąd generowania PDF: ' + (error instanceof Error ? error.message : 'Nieznany błąd') },
       { status: 500 }
