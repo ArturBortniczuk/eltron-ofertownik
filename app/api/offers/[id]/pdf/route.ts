@@ -35,10 +35,8 @@ function addPolishText(
     // Konwertuj polskie znaki
     const convertedText = convertPolishChars(String(text));
     
-    doc.text(convertedText, x, y, {
-      ...options,
-      charSpace: 0.3
-    });
+    // Usuń charSpace - może powoduje problemy
+    doc.text(convertedText, x, y, options);
   } catch (error) {
     console.error('Error adding Polish text:', text, error);
     // Fallback - dodaj tekst bez konwersji
@@ -255,68 +253,77 @@ export async function GET(
       margin: { left: 15, right: 15 }
     });
 
-    // === PODSUMOWANIE W RAMCE ===
+    // === PODSUMOWANIE I WARUNKI OBOK SIEBIE ===
     yPos = (doc as any).lastAutoTable.finalY + 15;
     
     const totalNet = parseFloat(offer.total_net) || 0;
     const totalVat = parseFloat(offer.total_vat) || 0;
     const totalGross = parseFloat(offer.total_gross) || 0;
 
-    // Ramka podsumowania
-    const summaryWidth = 70;
-    const summaryX = pageWidth - summaryWidth - 15;
+    // LEWA STRONA - WARUNKI OFERTY
+    const leftBoxWidth = 90;
+    const leftBoxX = 15;
+    
     doc.setFillColor(248, 249, 250);
     doc.setDrawColor(200, 200, 200);
-    doc.roundedRect(summaryX, yPos, summaryWidth, 30, 2, 2, 'FD');
+    doc.roundedRect(leftBoxX, yPos, leftBoxWidth, 50, 2, 2, 'FD');
+    
+    doc.setTextColor(59, 74, 92);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    addPolishText(doc, 'WARUNKI OFERTY:', leftBoxX + 5, yPos + 10);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    const deliveryDays = parseInt(offer.delivery_days) || 0;
+    const validDays = parseInt(offer.valid_days) || 30;
+    
+    const conditions = [
+      `• Czas dostawy: ${deliveryDays} dni roboczych`,
+      `• Waznosc: ${validDays} dni`,
+      `• Platnosc: przelew 14 dni`,
+      `• Ceny zawieraja VAT`
+    ];
+    
+    conditions.forEach((condition, index) => {
+      addPolishText(doc, condition, leftBoxX + 5, yPos + 18 + (index * 7));
+    });
+
+    // PRAWA STRONA - PODSUMOWANIE
+    const rightBoxWidth = 80;
+    const rightBoxX = pageWidth - rightBoxWidth - 15;
+    
+    doc.setFillColor(248, 249, 250);
+    doc.setDrawColor(200, 200, 200);
+    doc.roundedRect(rightBoxX, yPos, rightBoxWidth, 35, 2, 2, 'FD');
 
     // Podsumowanie
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    addPolishText(doc, 'Wartosc netto:', summaryX + 5, yPos + 8);
-    addPolishText(doc, `${totalNet.toFixed(2)} zl`, summaryX + summaryWidth - 5, yPos + 8, { align: 'right' });
+    addPolishText(doc, 'Wartosc netto:', rightBoxX + 5, yPos + 10);
+    addPolishText(doc, `${totalNet.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 10, { align: 'right' });
     
-    addPolishText(doc, 'VAT:', summaryX + 5, yPos + 15);
-    addPolishText(doc, `${totalVat.toFixed(2)} zl`, summaryX + summaryWidth - 5, yPos + 15, { align: 'right' });
+    addPolishText(doc, 'VAT:', rightBoxX + 5, yPos + 18);
+    addPolishText(doc, `${totalVat.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 18, { align: 'right' });
     
     // Linia separująca
     doc.setDrawColor(59, 74, 92);
     doc.setLineWidth(0.5);
-    doc.line(summaryX + 5, yPos + 18, summaryX + summaryWidth - 5, yPos + 18);
+    doc.line(rightBoxX + 5, yPos + 22, rightBoxX + rightBoxWidth - 5, yPos + 22);
 
     // RAZEM - większa czcionka
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(59, 74, 92);
-    addPolishText(doc, 'RAZEM DO ZAPLATY:', summaryX + 5, yPos + 25);
-    addPolishText(doc, `${totalGross.toFixed(2)} zl`, summaryX + summaryWidth - 5, yPos + 25, { align: 'right' });
-
-    // === WARUNKI ===
-    yPos += 45;
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    addPolishText(doc, 'WARUNKI OFERTY:', 15, yPos);
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    const deliveryDays = parseInt(offer.delivery_days) || 0;
-    
-    const conditions = [
-      `• Przewidywany czas dostawy: ${deliveryDays} dni roboczych`,
-      `• Oferta wazna przez: ${validDays} dni`,
-      `• Platnosc: przelew 14 dni`,
-      `• Ceny zawieraja VAT`
-    ];
-    
-    conditions.forEach((condition, index) => {
-      addPolishText(doc, condition, 15, yPos + 10 + (index * 6));
-    });
+    addPolishText(doc, 'RAZEM DO ZAPLATY:', rightBoxX + 5, yPos + 30);
+    addPolishText(doc, `${totalGross.toFixed(2)} zl`, rightBoxX + rightBoxWidth - 5, yPos + 30, { align: 'right' });
 
     // === UWAGI (jeśli istnieją) ===
     if (offer.notes) {
-      yPos += 40;
+      yPos += 60; // Zwiększony odstęp bo teraz mamy dwie ramki
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
       addPolishText(doc, 'UWAGI:', 15, yPos);
@@ -330,7 +337,7 @@ export async function GET(
     }
 
     // === STOPKA ===
-    yPos = Math.max(yPos + 15, 240);
+    yPos = Math.max(yPos + 60, 260); // Zwiększony odstęp
     
     // Linia separująca
     doc.setDrawColor(200, 200, 200);
