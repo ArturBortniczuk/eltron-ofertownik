@@ -50,11 +50,10 @@ export async function GET(
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
     
-    // Dodaj obsługę polskich znaków
+    // Dodaj metadane PDF
     doc.setProperties({
       title: `Oferta ${offer.id}`,
-      creator: 'Grupa Eltron',
-      encoding: 'UTF-8'
+      creator: 'Grupa Eltron'
     });
     
     // === HEADER Z LOGO I ADRESEM ===
