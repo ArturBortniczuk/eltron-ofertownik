@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       FROM clients 
       WHERE created_by = $1
     `;
-    const params = [userId];
+    const params: any[] = [userId];
 
     if (search && search.length >= 2) {
       query += ` AND (name ILIKE $2 OR email ILIKE $2 OR contact_person ILIKE $2)`;
