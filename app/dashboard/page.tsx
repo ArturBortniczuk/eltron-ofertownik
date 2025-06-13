@@ -86,7 +86,6 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* Welcome header */}
       <div>
-        <div className="bg-red-500 p-4 text-white mb-4">🔥 TEST TAILWIND - jeśli to jest czerwone, działa!</div>
         <h1 className="text-3xl font-bold text-gray-900">
           Witaj, {session?.user?.name}!
         </h1>
