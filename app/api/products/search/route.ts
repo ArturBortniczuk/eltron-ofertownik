@@ -1,3 +1,4 @@
+// app/api/products/search/route.ts - ZAKTUALIZOWANA WERSJA
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/auth';
@@ -20,38 +21,48 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
 
-    // Wyszukaj produkty podobne do zapytania
+    // Wyszukaj produkty z historii ofert wszystkich użytkowników
     const result = await db.query(`
       SELECT DISTINCT 
-        p.id,
-        p.name,
-        p.unit,
-        p.created_at,
-        pp.price as last_price,
-        pp.used_at as last_used_at,
-        u.name as last_used_by
-      FROM products p
-      LEFT JOIN LATERAL (
-        SELECT price, used_at, used_by 
-        FROM product_prices 
-        WHERE product_id = p.id 
-        ORDER BY used_at DESC 
-        LIMIT 1
-      ) pp ON true
-      LEFT JOIN users u ON pp.used_by = u.id
-      WHERE p.name ILIKE $1
+        oi.product_name as name,
+        oi.unit,
+        oi.unit_price as last_price,
+        o.created_at as last_used_at,
+        u.name as last_used_by,
+        COUNT(*) OVER (PARTITION BY oi.product_name, oi.unit) as usage_count,
+        AVG(oi.unit_price) OVER (PARTITION BY oi.product_name, oi.unit) as avg_price,
+        MIN(oi.unit_price) OVER (PARTITION BY oi.product_name, oi.unit) as min_price,
+        MAX(oi.unit_price) OVER (PARTITION BY oi.product_name, oi.unit) as max_price
+      FROM offer_items oi
+      JOIN offers o ON oi.offer_id = o.id
+      JOIN users u ON o.user_id = u.id
+      WHERE oi.product_name ILIKE $1
       ORDER BY 
         CASE 
-          WHEN p.name ILIKE $2 THEN 1
-          WHEN p.name ILIKE $1 THEN 2
+          WHEN oi.product_name ILIKE $2 THEN 1
+          WHEN oi.product_name ILIKE $1 THEN 2
           ELSE 3
         END,
-        p.last_used DESC,
-        p.name
-      LIMIT 10
+        usage_count DESC,
+        o.created_at DESC,
+        oi.product_name
+      LIMIT 15
     `, [`%${query}%`, `${query}%`]);
 
-    return NextResponse.json(result.rows);
+    // Formatuj wyniki dla lepszego UX
+    const formattedResults = result.rows.map(row => ({
+      name: row.name,
+      unit: row.unit,
+      last_price: parseFloat(row.last_price),
+      last_used_at: row.last_used_at,
+      last_used_by: row.last_used_by,
+      usage_count: parseInt(row.usage_count),
+      avg_price: parseFloat(row.avg_price),
+      min_price: parseFloat(row.min_price),
+      max_price: parseFloat(row.max_price)
+    }));
+
+    return NextResponse.json(formattedResults);
 
   } catch (error) {
     console.error('Product search error:', error);
