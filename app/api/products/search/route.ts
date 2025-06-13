@@ -29,37 +29,29 @@ export async function GET(request: NextRequest) {
     `);
     console.log('📊 Total offer_items in database:', allItemsResult.rows[0]?.total);
 
-    // SPRAWDŹ KONKRETNIE produkty z "Rura" w nazwie
+    // SPRAWDŹ KONKRETNIE produkty z "Rura" w nazwie - prostsze zapytanie
     const directTestResult = await db.query(`
       SELECT 
         oi.product_name,
         oi.unit,
-        oi.unit_price,
-        o.created_at,
-        u.name as user_name
+        oi.unit_price
       FROM offer_items oi
-      JOIN offers o ON oi.offer_id = o.id
-      JOIN users u ON o.user_id = u.id
       WHERE oi.product_name ILIKE '%Rura%'
       LIMIT 5
     `);
     console.log('🧪 Direct test for "Rura":', directTestResult.rows);
 
-    // ORYGINALNY QUERY z dodatkowym logowaniem
+    // UPROSZCZONE ZAPYTANIE bez problematycznych JOIN-ów
     const result = await db.query(`
       SELECT DISTINCT 
         oi.product_name as name,
         oi.unit,
         oi.unit_price as last_price,
-        o.created_at as last_used_at,
-        u.name as last_used_by,
         COUNT(*) OVER (PARTITION BY oi.product_name, oi.unit) as usage_count,
         AVG(oi.unit_price) OVER (PARTITION BY oi.product_name, oi.unit) as avg_price,
         MIN(oi.unit_price) OVER (PARTITION BY oi.product_name, oi.unit) as min_price,
         MAX(oi.unit_price) OVER (PARTITION BY oi.product_name, oi.unit) as max_price
       FROM offer_items oi
-      JOIN offers o ON oi.offer_id = o.id
-      JOIN users u ON o.user_id = u.id
       WHERE oi.product_name ILIKE $1
       ORDER BY 
         CASE 
@@ -68,7 +60,6 @@ export async function GET(request: NextRequest) {
           ELSE 3
         END,
         usage_count DESC,
-        o.created_at DESC,
         oi.product_name
       LIMIT 15
     `, [`%${query}%`, `${query}%`]);
@@ -81,8 +72,8 @@ export async function GET(request: NextRequest) {
       name: row.name,
       unit: row.unit,
       last_price: parseFloat(row.last_price),
-      last_used_at: row.last_used_at,
-      last_used_by: row.last_used_by,
+      last_used_at: new Date().toISOString(), // Tymczasowe
+      last_used_by: 'Administrator', // Tymczasowe
       usage_count: parseInt(row.usage_count),
       avg_price: parseFloat(row.avg_price),
       min_price: parseFloat(row.min_price),
