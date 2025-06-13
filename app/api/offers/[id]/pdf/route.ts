@@ -2,305 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
 import { db } from '../../../../../lib/db';
-import React from 'react';
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
-
-// Style dla PDF
-const styles = StyleSheet.create({
-  page: {
-    flexDirection: 'column',
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    fontFamily: 'Helvetica'
-  },
-  header: {
-    backgroundColor: '#3B4A5C',
-    color: 'white',
-    padding: 15,
-    marginBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between'
-  },
-  headerLeft: {
-    flexDirection: 'column'
-  },
-  headerRight: {
-    flexDirection: 'column',
-    alignItems: 'flex-end'
-  },
-  companyName: {
-    fontSize: 24,
-    fontWeight: 'bold'
-  },
-  companyDetails: {
-    fontSize: 10,
-    marginTop: 5
-  },
-  offerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold'
-  },
-  offerDetails: {
-    fontSize: 10,
-    marginTop: 5
-  },
-  clientBox: {
-    backgroundColor: '#F8F9FA',
-    border: '1px solid #CCCCCC',
-    padding: 15,
-    marginBottom: 20,
-    borderRadius: 5
-  },
-  clientLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#3B4A5C',
-    marginBottom: 5
-  },
-  clientName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 5
-  },
-  clientDetails: {
-    fontSize: 10,
-    marginBottom: 2
-  },
-  greeting: {
-    fontSize: 11,
-    marginBottom: 20,
-    lineHeight: 1.5
-  },
-  table: {
-    display: 'table',
-    width: 'auto',
-    borderStyle: 'solid',
-    borderWidth: 1,
-    borderColor: '#CCCCCC',
-    marginBottom: 20
-  },
-  tableRow: {
-    margin: 'auto',
-    flexDirection: 'row'
-  },
-  tableHeader: {
-    backgroundColor: '#3B4A5C',
-    color: 'white'
-  },
-  tableCell: {
-    margin: 'auto',
-    padding: 8,
-    fontSize: 9,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    borderColor: '#CCCCCC'
-  },
-  tableCellHeader: {
-    margin: 'auto',
-    padding: 8,
-    fontSize: 10,
-    fontWeight: 'bold',
-    borderStyle: 'solid',
-    borderWidth: 1,
-    borderColor: '#CCCCCC'
-  },
-  summaryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20
-  },
-  conditionsBox: {
-    backgroundColor: '#F8F9FA',
-    border: '1px solid #CCCCCC',
-    padding: 15,
-    width: '48%',
-    borderRadius: 5
-  },
-  summaryBox: {
-    backgroundColor: '#F8F9FA',
-    border: '1px solid #CCCCCC',
-    padding: 15,
-    width: '48%',
-    borderRadius: 5
-  },
-  conditionsTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#3B4A5C',
-    marginBottom: 10
-  },
-  conditionItem: {
-    fontSize: 10,
-    marginBottom: 5
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5
-  },
-  summaryLabel: {
-    fontSize: 11
-  },
-  summaryValue: {
-    fontSize: 11,
-    fontWeight: 'bold'
-  },
-  summaryTotal: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#3B4A5C'
-  },
-  footer: {
-    marginTop: 40,
-    paddingTop: 20,
-    borderTop: '1px solid #CCCCCC',
-    fontSize: 10,
-    color: '#666666'
-  },
-  footerBold: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#3B4A5C'
-  }
-});
-
-// Komponent PDF
-const OfferPDF = ({ offer, items }: { offer: any, items: any[] }) => {
-  const offerDate = new Date(offer.created_at).toLocaleDateString('pl-PL');
-  const validDays = parseInt(offer.valid_days) || 30;
-  const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
-  const deliveryDays = parseInt(offer.delivery_days) || 0;
-  const totalNet = parseFloat(offer.total_net) || 0;
-  const totalVat = parseFloat(offer.total_vat) || 0;
-  const totalGross = parseFloat(offer.total_gross) || 0;
-  const additionalCosts = parseFloat(offer.additional_costs) || 0;
-
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.companyName}>GRUPA ELTRON</Text>
-            <Text style={styles.companyDetails}>ul. Przykładowa 123, 00-000 Warszawa</Text>
-            <Text style={styles.companyDetails}>Tel: +48 123 456 789 | Email: kontakt@eltron.pl</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={styles.offerTitle}>OFERTA Nr {offer.id}/{new Date().getFullYear()}</Text>
-            <Text style={styles.offerDetails}>Data: {offerDate}</Text>
-            <Text style={styles.offerDetails}>Ważna do: {validUntil}</Text>
-          </View>
-        </View>
-
-        {/* Dane klienta */}
-        <View style={styles.clientBox}>
-          <Text style={styles.clientLabel}>DLA:</Text>
-          <Text style={styles.clientName}>{offer.client_name || ''}</Text>
-          {offer.client_email && <Text style={styles.clientDetails}>Email: {offer.client_email}</Text>}
-          {offer.client_phone && <Text style={styles.clientDetails}>Tel: {offer.client_phone}</Text>}
-          {offer.client_nip && <Text style={styles.clientDetails}>NIP: {offer.client_nip}</Text>}
-        </View>
-
-        {/* Powitanie */}
-        <View style={styles.greeting}>
-          <Text>Dzień dobry,</Text>
-          <Text>Przesyłam ofertę na zamówione towary zgodnie z Państwa zapytaniem.</Text>
-        </View>
-
-        {/* Tabela */}
-        <View style={styles.table}>
-          {/* Nagłówek tabeli */}
-          <View style={[styles.tableRow, styles.tableHeader]}>
-            <Text style={[styles.tableCellHeader, { width: '8%' }]}>Lp.</Text>
-            <Text style={[styles.tableCellHeader, { width: '40%' }]}>Nazwa towaru/usługi</Text>
-            <Text style={[styles.tableCellHeader, { width: '12%' }]}>Ilość</Text>
-            <Text style={[styles.tableCellHeader, { width: '15%' }]}>Cena netto</Text>
-            <Text style={[styles.tableCellHeader, { width: '10%' }]}>VAT</Text>
-            <Text style={[styles.tableCellHeader, { width: '15%' }]}>Wartość brutto</Text>
-          </View>
-
-          {/* Pozycje */}
-          {items.map((item, index) => {
-            const quantity = parseFloat(item.quantity) || 0;
-            const unitPrice = parseFloat(item.unit_price) || 0;
-            const vatRate = parseFloat(item.vat_rate) || 0;
-            const grossAmount = parseFloat(item.gross_amount) || 0;
-
-            return (
-              <View key={index} style={styles.tableRow}>
-                <Text style={[styles.tableCell, { width: '8%' }]}>{index + 1}</Text>
-                <Text style={[styles.tableCell, { width: '40%' }]}>{item.product_name || ''}</Text>
-                <Text style={[styles.tableCell, { width: '12%' }]}>{quantity} {item.unit || ''}</Text>
-                <Text style={[styles.tableCell, { width: '15%' }]}>{unitPrice.toFixed(2)} zł</Text>
-                <Text style={[styles.tableCell, { width: '10%' }]}>{vatRate}%</Text>
-                <Text style={[styles.tableCell, { width: '15%' }]}>{grossAmount.toFixed(2)} zł</Text>
-              </View>
-            );
-          })}
-
-          {/* Dodatkowe koszty */}
-          {additionalCosts > 0 && (
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableCell, { width: '8%' }]}></Text>
-              <Text style={[styles.tableCell, { width: '40%' }]}>
-                {offer.additional_costs_description || 'Dodatkowe koszty'}
-              </Text>
-              <Text style={[styles.tableCell, { width: '12%' }]}>1 usł</Text>
-              <Text style={[styles.tableCell, { width: '15%' }]}>{additionalCosts.toFixed(2)} zł</Text>
-              <Text style={[styles.tableCell, { width: '10%' }]}>23%</Text>
-              <Text style={[styles.tableCell, { width: '15%' }]}>{(additionalCosts * 1.23).toFixed(2)} zł</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Podsumowanie i warunki */}
-        <View style={styles.summaryContainer}>
-          {/* Warunki */}
-          <View style={styles.conditionsBox}>
-            <Text style={styles.conditionsTitle}>WARUNKI OFERTY:</Text>
-            <Text style={styles.conditionItem}>• Czas dostawy: {deliveryDays} dni roboczych</Text>
-            <Text style={styles.conditionItem}>• Ważność: {validDays} dni</Text>
-            <Text style={styles.conditionItem}>• Płatność: przelew 14 dni</Text>
-            <Text style={styles.conditionItem}>• Ceny zawierają VAT</Text>
-          </View>
-
-          {/* Podsumowanie */}
-          <View style={styles.summaryBox}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Wartość netto:</Text>
-              <Text style={styles.summaryValue}>{totalNet.toFixed(2)} zł</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>VAT:</Text>
-              <Text style={styles.summaryValue}>{totalVat.toFixed(2)} zł</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryTotal}>RAZEM DO ZAPŁATY:</Text>
-              <Text style={styles.summaryTotal}>{totalGross.toFixed(2)} zł</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Uwagi */}
-        {offer.notes && (
-          <View style={{ marginTop: 20 }}>
-            <Text style={styles.conditionsTitle}>UWAGI:</Text>
-            <Text style={{ fontSize: 10, marginTop: 5 }}>{offer.notes}</Text>
-          </View>
-        )}
-
-        {/* Stopka */}
-        <View style={styles.footer}>
-          <Text>W celu realizacji zamówienia proszę o kontakt:</Text>
-          <Text>Email: {offer.created_by_email || ''} | Tel: +48 123 456 789</Text>
-          <Text style={{ marginTop: 15 }}>Dziękujemy za zainteresowanie naszą ofertą.</Text>
-          <Text>Pozdrawiamy,</Text>
-          <Text style={styles.footerBold}>{offer.created_by_name || ''} | GRUPA ELTRON</Text>
-        </View>
-      </Page>
-    </Document>
-  );
-};
+import puppeteer from 'puppeteer';
 
 export async function GET(
   request: NextRequest,
@@ -341,10 +43,383 @@ export async function GET(
     `, [offerId]);
     const items = itemsResult.rows;
 
-    // Generuj PDF używając React-PDF
-    const pdfBuffer = await pdf(<OfferPDF offer={offer} items={items} />).toBuffer();
+    // Przygotuj dane
+    const offerDate = new Date(offer.created_at).toLocaleDateString('pl-PL');
+    const validDays = parseInt(offer.valid_days) || 30;
+    const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL');
+    const deliveryDays = parseInt(offer.delivery_days) || 0;
+    const totalNet = parseFloat(offer.total_net) || 0;
+    const totalVat = parseFloat(offer.total_vat) || 0;
+    const totalGross = parseFloat(offer.total_gross) || 0;
+    const additionalCosts = parseFloat(offer.additional_costs) || 0;
 
-    // Zwróć PDF z polskimi znakami (React-PDF obsługuje UTF-8 natywnie)
+    // Stwórz HTML template z CSS
+    const html = `
+    <!DOCTYPE html>
+    <html lang="pl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Oferta ${offer.id}</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Arial', sans-serif;
+                font-size: 12px;
+                line-height: 1.4;
+                color: #000;
+                background: white;
+            }
+            
+            .container {
+                width: 210mm;
+                margin: 0 auto;
+                padding: 15mm;
+                background: white;
+            }
+            
+            .header {
+                background: #3B4A5C;
+                color: white;
+                padding: 15px;
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+            
+            .header-left h1 {
+                font-size: 24px;
+                font-weight: bold;
+                margin-bottom: 8px;
+            }
+            
+            .header-left p {
+                font-size: 10px;
+                margin-bottom: 2px;
+            }
+            
+            .header-right {
+                text-align: right;
+            }
+            
+            .header-right h2 {
+                font-size: 18px;
+                font-weight: bold;
+                margin-bottom: 8px;
+            }
+            
+            .header-right p {
+                font-size: 10px;
+                margin-bottom: 2px;
+            }
+            
+            .client-box {
+                background: #F8F9FA;
+                border: 2px solid #CCCCCC;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 20px;
+            }
+            
+            .client-label {
+                font-size: 12px;
+                font-weight: bold;
+                color: #3B4A5C;
+                margin-bottom: 8px;
+            }
+            
+            .client-name {
+                font-size: 16px;
+                font-weight: bold;
+                margin-bottom: 8px;
+            }
+            
+            .client-details {
+                font-size: 10px;
+                margin-bottom: 3px;
+            }
+            
+            .greeting {
+                font-size: 11px;
+                margin-bottom: 20px;
+                line-height: 1.6;
+            }
+            
+            .table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                font-size: 9px;
+            }
+            
+            .table th {
+                background: #3B4A5C;
+                color: white;
+                padding: 10px 5px;
+                text-align: center;
+                font-weight: bold;
+                border: 1px solid #CCCCCC;
+                font-size: 10px;
+            }
+            
+            .table td {
+                padding: 8px 5px;
+                border: 1px solid #CCCCCC;
+                text-align: center;
+            }
+            
+            .table tr:nth-child(even) {
+                background: #F8F9FA;
+            }
+            
+            .table .text-left {
+                text-align: left;
+            }
+            
+            .table .text-right {
+                text-align: right;
+            }
+            
+            .summary-section {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 30px;
+                gap: 20px;
+            }
+            
+            .conditions-box, .summary-box {
+                background: #F8F9FA;
+                border: 2px solid #CCCCCC;
+                border-radius: 8px;
+                padding: 15px;
+                width: 48%;
+            }
+            
+            .box-title {
+                font-size: 12px;
+                font-weight: bold;
+                color: #3B4A5C;
+                margin-bottom: 10px;
+            }
+            
+            .condition-item {
+                font-size: 10px;
+                margin-bottom: 5px;
+            }
+            
+            .summary-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+                font-size: 11px;
+            }
+            
+            .summary-total {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 2px solid #3B4A5C;
+                font-size: 12px;
+                font-weight: bold;
+                color: #3B4A5C;
+            }
+            
+            .notes {
+                margin-top: 30px;
+            }
+            
+            .notes-title {
+                font-size: 12px;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+            
+            .notes-content {
+                font-size: 10px;
+                line-height: 1.5;
+            }
+            
+            .footer {
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #CCCCCC;
+                font-size: 10px;
+                color: #666;
+            }
+            
+            .footer-contact {
+                margin-bottom: 15px;
+            }
+            
+            .footer-signature {
+                font-weight: bold;
+                color: #3B4A5C;
+            }
+            
+            @page {
+                size: A4;
+                margin: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <div class="header-left">
+                    <h1>GRUPA ELTRON</h1>
+                    <p>ul. Przykładowa 123, 00-000 Warszawa</p>
+                    <p>Tel: +48 123 456 789 | Email: kontakt@eltron.pl</p>
+                </div>
+                <div class="header-right">
+                    <h2>OFERTA Nr ${offer.id}/${new Date().getFullYear()}</h2>
+                    <p>Data: ${offerDate}</p>
+                    <p>Ważna do: ${validUntil}</p>
+                </div>
+            </div>
+
+            <!-- Dane klienta -->
+            <div class="client-box">
+                <div class="client-label">DLA:</div>
+                <div class="client-name">${offer.client_name || ''}</div>
+                ${offer.client_email ? `<div class="client-details">Email: ${offer.client_email}</div>` : ''}
+                ${offer.client_phone ? `<div class="client-details">Tel: ${offer.client_phone}</div>` : ''}
+                ${offer.client_nip ? `<div class="client-details">NIP: ${offer.client_nip}</div>` : ''}
+            </div>
+
+            <!-- Powitanie -->
+            <div class="greeting">
+                <p>Dzień dobry,</p>
+                <p>Przesyłam ofertę na zamówione towary zgodnie z Państwa zapytaniem.</p>
+            </div>
+
+            <!-- Tabela -->
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width: 8%">Lp.</th>
+                        <th style="width: 40%">Nazwa towaru/usługi</th>
+                        <th style="width: 12%">Ilość</th>
+                        <th style="width: 15%">Cena netto</th>
+                        <th style="width: 10%">VAT</th>
+                        <th style="width: 15%">Wartość brutto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${items.map((item, index) => {
+                        const quantity = parseFloat(item.quantity) || 0;
+                        const unitPrice = parseFloat(item.unit_price) || 0;
+                        const vatRate = parseFloat(item.vat_rate) || 0;
+                        const grossAmount = parseFloat(item.gross_amount) || 0;
+                        
+                        return `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td class="text-left">${item.product_name || ''}</td>
+                            <td>${quantity} ${item.unit || ''}</td>
+                            <td class="text-right">${unitPrice.toFixed(2)} zł</td>
+                            <td>${vatRate}%</td>
+                            <td class="text-right">${grossAmount.toFixed(2)} zł</td>
+                        </tr>
+                        `;
+                    }).join('')}
+                    
+                    ${additionalCosts > 0 ? `
+                    <tr style="border-top: 2px solid #3B4A5C;">
+                        <td></td>
+                        <td class="text-left">${offer.additional_costs_description || 'Dodatkowe koszty'}</td>
+                        <td>1 usł</td>
+                        <td class="text-right">${additionalCosts.toFixed(2)} zł</td>
+                        <td>23%</td>
+                        <td class="text-right">${(additionalCosts * 1.23).toFixed(2)} zł</td>
+                    </tr>
+                    ` : ''}
+                </tbody>
+            </table>
+
+            <!-- Podsumowanie i warunki -->
+            <div class="summary-section">
+                <!-- Warunki -->
+                <div class="conditions-box">
+                    <div class="box-title">WARUNKI OFERTY:</div>
+                    <div class="condition-item">• Czas dostawy: ${deliveryDays} dni roboczych</div>
+                    <div class="condition-item">• Ważność: ${validDays} dni</div>
+                    <div class="condition-item">• Płatność: przelew 14 dni</div>
+                    <div class="condition-item">• Ceny zawierają VAT</div>
+                </div>
+
+                <!-- Podsumowanie -->
+                <div class="summary-box">
+                    <div class="summary-row">
+                        <span>Wartość netto:</span>
+                        <span>${totalNet.toFixed(2)} zł</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>VAT:</span>
+                        <span>${totalVat.toFixed(2)} zł</span>
+                    </div>
+                    <div class="summary-total">
+                        <span>RAZEM DO ZAPŁATY:</span>
+                        <span>${totalGross.toFixed(2)} zł</span>
+                    </div>
+                </div>
+            </div>
+
+            ${offer.notes ? `
+            <!-- Uwagi -->
+            <div class="notes">
+                <div class="notes-title">UWAGI:</div>
+                <div class="notes-content">${offer.notes}</div>
+            </div>
+            ` : ''}
+
+            <!-- Stopka -->
+            <div class="footer">
+                <div class="footer-contact">
+                    <p>W celu realizacji zamówienia proszę o kontakt:</p>
+                    <p>Email: ${offer.created_by_email || ''} | Tel: +48 123 456 789</p>
+                </div>
+                <div>
+                    <p>Dziękujemy za zainteresowanie naszą ofertą.</p>
+                    <p>Pozdrawiamy,</p>
+                    <p class="footer-signature">${offer.created_by_name || ''} | GRUPA ELTRON</p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    // Uruchom Puppeteer i wygeneruj PDF
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '0mm',
+        right: '0mm',
+        bottom: '0mm',
+        left: '0mm'
+      }
+    });
+    
+    await browser.close();
+
+    // Zwróć PDF z polskimi znakami
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
