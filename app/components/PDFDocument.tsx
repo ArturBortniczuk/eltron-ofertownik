@@ -1,4 +1,4 @@
-// app/components/PDFDocument.tsx - NAPRAWIONA WERSJA z polskimi znakami
+// app/components/PDFDocument.tsx - NAPRAWIONA WERSJA z poprawionym typowaniem
 'use client';
 
 import React from 'react';
@@ -386,7 +386,7 @@ export const PDFDownloadButton: React.FC<PDFDownloadButtonProps> = ({ offer, ite
       document={<OfferDocument offer={offer} items={items} />}
       fileName={fileName}
     >
-      {({ loading, error }: { loading: boolean; error: Error | null }) => {
+      {({ loading, error }: any) => {
         if (loading) {
           return <span className="text-blue-600 text-sm font-medium cursor-pointer">⏳ PDF...</span>;
         }
@@ -408,7 +408,7 @@ export const PDFDownloadButtonPrimary: React.FC<PDFDownloadButtonProps> = ({ off
       document={<OfferDocument offer={offer} items={items} />}
       fileName={fileName}
     >
-      {({ loading, error }: { loading: boolean; error: Error | null }) => (
+      {({ loading, error }: any) => (
         <button className="btn-primary" disabled={loading || !!error}>
           {loading ? '⏳ Generowanie PDF...' : error ? '❌ Błąd PDF' : '📄 Pobierz PDF'}
         </button>
