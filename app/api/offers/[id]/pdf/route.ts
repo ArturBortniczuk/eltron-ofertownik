@@ -47,49 +47,30 @@ export async function GET(
     const fontPath = path.join(process.cwd(), 'public', 'fonts', 'Roboto-Regular.ttf');
     const fontBoldPath = path.join(process.cwd(), 'public', 'fonts', 'Roboto-Bold.ttf');
 
-    // Debug font existence
-    console.log('Roboto-Regular.ttf exists:', fs.existsSync(fontPath));
-    console.log('Roboto-Bold.ttf exists:', fs.existsSync(fontBoldPath));
+    if (!fs.existsSync(fontPath)) throw new Error('Brakuje Roboto-Regular.ttf');
+    if (!fs.existsSync(fontBoldPath)) throw new Error('Brakuje Roboto-Bold.ttf');
 
-    const doc = new PDFDocument({
-      margin: 50,
-      size: 'A4',
-      info: {
-        Title: `Oferta ${offerId} - ${offer.client_name}`,
-        Author: 'Grupa Eltron',
-        Subject: 'Oferta handlowa',
-        Creator: 'Ofertownik Eltron'
-      }
-    });
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    doc.font(fontPath); // bez registerFont — tylko bezpośrednia ścieżka
 
-    // Rejestruj i ustaw font od razu
-    doc.registerFont('Roboto', fontPath);
-    doc.registerFont('RobotoBold', fontBoldPath);
-    doc.font('Roboto');
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('error', (err) => { throw err; });
 
-    // Przykładowa zawartość
-    doc.fontSize(20).font('RobotoBold').text(`Oferta #${offerId}`, 50, 50);
-    doc.fontSize(12).font('Roboto').text(`Dla: ${offer.client_name || 'Nieznany klient'}`, 50, 90);
+    // Header
+    doc.fontSize(20).text(`Oferta #${offerId}`, 50, 50);
+    doc.fontSize(12).text(`Dla: ${offer.client_name || 'Nieznany klient'}`, 50, 80);
+    doc.moveDown().text('Zażółć gęślą jaźń. Łódź, Śląsk, Białystok.', { lineGap: 4 });
 
-    // Prosty test polskich znaków
-    doc.text('Zażółć gęślą jaźń. Łódź, Śląsk, Białystok.');
-
-    // Tabela z pozycjami (bardzo uproszczona)
-    let y = 150;
+    // Pozycje
+    let y = 140;
     items.forEach((item: any, index: number) => {
       doc.text(`${index + 1}. ${item.product_name} - ${item.quantity} x ${item.unit_price} zł`, 50, y);
       y += 20;
     });
 
-    // Bufor PDF
-    const chunks: Buffer[] = [];
-
-    doc.on('data', (chunk) => chunks.push(chunk));
-    doc.on('error', (err) => { throw err; });
     doc.end();
-
     await new Promise<void>((resolve) => doc.on('end', resolve));
-
     const pdfBuffer = Buffer.concat(chunks);
 
     return new NextResponse(pdfBuffer, {
@@ -100,7 +81,6 @@ export async function GET(
         'Cache-Control': 'no-cache',
       },
     });
-
   } catch (error) {
     console.error('PDF generation error:', error instanceof Error ? error.message : error);
     return NextResponse.json(
