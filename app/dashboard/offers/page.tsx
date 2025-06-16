@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePDFDownload } from '../../components/PDFGenerator';
+// Import dynamiczny dla PDF
+import dynamic from 'next/dynamic';
 
 interface Offer {
   id: number;
@@ -46,7 +48,15 @@ export default function OffersListPage() {
   useEffect(() => {
     fetchOffers();
   }, [currentPage, statusFilter]);
-
+  
+  const PDFDownloadButton = dynamic(
+    () => import('../../components/PDFDocument').then(mod => mod.PDFDownloadButton),
+    { 
+      ssr: false,
+      loading: () => <span className="text-blue-600 text-sm">⏳</span>
+    }
+  );
+  
   const fetchOffers = async () => {
     setLoading(true);
     try {
