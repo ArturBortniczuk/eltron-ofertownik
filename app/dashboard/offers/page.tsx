@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePDFDownload } from '../../components/PDFGenerator';
-// Import dynamiczny dla PDF
-import dynamic from 'next/dynamic';
+import { PDFButtonWrapper } from '../../components/PDFButtonWrapper';
 
 interface Offer {
   id: number;
