@@ -1,88 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../../lib/auth';
-import { db } from '../../../../../lib/db';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = parseInt(session.user.id);
-    const offerId = parseInt(params.id);
-
-    const offerResult = await db.query(`
-      SELECT 
-        o.*, u.name as created_by_name, u.email as created_by_email,
-        c.nip as client_nip, c.address as client_address
-      FROM offers o
-      JOIN users u ON o.user_id = u.id
-      LEFT JOIN clients c ON o.client_id = c.id
-      WHERE o.id = $1 AND o.user_id = $2
-    `, [offerId, userId]);
-
-    if (offerResult.rows.length === 0) {
-      return NextResponse.json({ error: 'Oferta nie została znaleziona' }, { status: 404 });
-    }
-
-    const offer = offerResult.rows[0];
-
-    const itemsResult = await db.query(`
-      SELECT * FROM offer_items
-      WHERE offer_id = $1
-      ORDER BY position_order
-    `, [offerId]);
-
-    const items = itemsResult.rows;
-
     const fontPath = path.join(process.cwd(), 'public', 'fonts', 'Roboto-Regular.ttf');
-    const fontBoldPath = path.join(process.cwd(), 'public', 'fonts', 'Roboto-Bold.ttf');
 
-    if (!fs.existsSync(fontPath)) throw new Error('Brakuje Roboto-Regular.ttf');
-    if (!fs.existsSync(fontBoldPath)) throw new Error('Brakuje Roboto-Bold.ttf');
+    if (!fs.existsSync(fontPath)) {
+      throw new Error('Brakuje pliku Roboto-Regular.ttf w public/fonts');
+    }
 
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
-    doc.font(fontPath); // bez registerFont — tylko bezpośrednia ścieżka
+    const doc = new PDFDocument({ size: 'A4', margin: 0 });
+    doc.font(fontPath);
 
     const chunks: Buffer[] = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('error', (err) => { throw err; });
 
-    // Header
-    doc.fontSize(20).text(`Oferta #${offerId}`, 50, 50);
-    doc.fontSize(12).text(`Dla: ${offer.client_name || 'Nieznany klient'}`, 50, 80);
-    doc.moveDown().text('Zażółć gęślą jaźń. Łódź, Śląsk, Białystok.', { lineGap: 4 });
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
 
-    // Pozycje
-    let y = 140;
-    items.forEach((item: any, index: number) => {
-      doc.text(`${index + 1}. ${item.product_name} - ${item.quantity} x ${item.unit_price} zł`, 50, y);
-      y += 20;
-    });
+    doc.fontSize(32)
+       .text('Zażółć gęślą jaźń', 0, pageHeight / 2 - 16, {
+         width: pageWidth,
+         align: 'center'
+       });
 
     doc.end();
     await new Promise<void>((resolve) => doc.on('end', resolve));
+
     const pdfBuffer = Buffer.concat(chunks);
 
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="Oferta_${offerId}.pdf"`,
-        'Cache-Control': 'no-cache',
+        'Content-Disposition': 'inline; filename="test.pdf"',
       },
     });
+
   } catch (error) {
-    console.error('PDF generation error:', error instanceof Error ? error.message : error);
+    console.error('PDF generation error:', error);
     return NextResponse.json(
       { error: `Błąd generowania PDF: ${error instanceof Error ? error.message : 'Nieznany błąd'}` },
       { status: 500 }
