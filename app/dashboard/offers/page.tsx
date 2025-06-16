@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePDFDownload } from '../../components/PDFGenerator';
 
 interface Offer {
   id: number;
@@ -38,6 +39,9 @@ export default function OffersListPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Hook do generowania PDF po stronie klienta
+  const { downloadPDF } = usePDFDownload();
 
   useEffect(() => {
     fetchOffers();
@@ -103,6 +107,11 @@ export default function OffersListPage() {
   const handleStatusFilter = (status: string) => {
     setStatusFilter(status);
     setCurrentPage(1);
+  };
+
+  // Funkcja do pobierania PDF
+  const handleDownloadPDF = (offerId: number) => {
+    downloadPDF(offerId);
   };
 
   return (
@@ -244,14 +253,12 @@ export default function OffersListPage() {
                         >
                           Podgląd
                         </Link>
-                        <a 
-                          href={`/api/offers/${offer.id}/pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button 
+                          onClick={() => handleDownloadPDF(offer.id)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                         >
                           PDF
-                        </a>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -290,14 +297,12 @@ export default function OffersListPage() {
                   >
                     Podgląd
                   </Link>
-                  <a 
-                    href={`/api/offers/${offer.id}/pdf`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button 
+                    onClick={() => handleDownloadPDF(offer.id)}
                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
                     Pobierz PDF
-                  </a>
+                  </button>
                 </div>
               </div>
             ))}
