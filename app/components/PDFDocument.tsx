@@ -293,9 +293,11 @@ export const PDFDownloadButton: React.FC<PDFDownloadButtonProps> = ({ offer, ite
       fileName={fileName}
       className="btn-primary"
     >
-      {({ blob, url, loading, error }) =>
-        loading ? '⏳ Generowanie PDF...' : '📄 Pobierz PDF'
-      }
+      {({ blob, url, loading, error }: any) => (
+        <span>
+          {loading ? '⏳ Generowanie PDF...' : '📄 Pobierz PDF'}
+        </span>
+      )}
     </PDFDownloadLink>
   );
 };
