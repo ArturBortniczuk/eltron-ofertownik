@@ -266,19 +266,24 @@ export async function GET(
     // Zwróć PDF jako response
     const chunks: Buffer[] = [];
     
-    return new Promise((resolve, reject) => {
-      doc.on('data', (chunk) => chunks.push(chunk));
-      doc.on('end', () => {
-        const pdfBuffer = Buffer.concat(chunks);
-        
-        const response = new NextResponse(pdfBuffer, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `inline; filename="Oferta_${offerId}_${offer.client_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`,
-            'Cache-Control': 'no-cache',
-          },
-        });
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.end();
+    
+    await new Promise<void>((resolve, reject) => {
+      doc.on('end', resolve);
+      doc.on('error', reject);
+    });
+    
+    const pdfBuffer = Buffer.concat(chunks);
+    
+    return new NextResponse(pdfBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="Oferta_${offerId}_${offer.client_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`,
+        'Cache-Control': 'no-cache',
+      },
+    });
         
         resolve(response);
       });
