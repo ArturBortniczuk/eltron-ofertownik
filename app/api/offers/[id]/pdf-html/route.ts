@@ -1,4 +1,4 @@
-// app/api/offers/[id]/pdf-html/route.ts
+// app/api/offers/[id]/pdf-html/route.ts - NAPRAWIONA WERSJA
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../lib/auth';
@@ -44,10 +44,6 @@ export async function GET(
     // Generuj HTML
     const html = generateOfferHTML(offer, items);
 
-    // Opcja 1: Użyj zewnętrznego API (np. Documint, PDFShift, api2pdf)
-    // const pdfBuffer = await generatePDFViaAPI(html);
-
-    // Opcja 2: Zwróć HTML i wygeneruj PDF po stronie klienta
     return new NextResponse(html, {
       status: 200,
       headers: {
@@ -56,7 +52,7 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('PDF generation error:', error);
+    console.error('PDF HTML generation error:', error);
     return NextResponse.json(
       { error: 'Błąd generowania PDF' },
       { status: 500 }
@@ -79,25 +75,25 @@ function generateOfferHTML(offer: any, items: any[]): string {
 
   const itemsHTML = items.map((item, index) => `
     <tr>
-      <td>${index + 1}</td>
+      <td style="text-align: center;">${index + 1}</td>
       <td>${item.product_name}</td>
-      <td>${item.quantity} ${item.unit}</td>
-      <td>${formatCurrency(item.unit_price)}</td>
-      <td>${item.vat_rate}%</td>
-      <td>${formatCurrency(item.net_amount)}</td>
-      <td>${formatCurrency(item.gross_amount)}</td>
+      <td style="text-align: center;">${item.quantity} ${item.unit}</td>
+      <td style="text-align: right;">${formatCurrency(item.unit_price)}</td>
+      <td style="text-align: center;">${item.vat_rate}%</td>
+      <td style="text-align: right;">${formatCurrency(item.net_amount)}</td>
+      <td style="text-align: right;">${formatCurrency(item.gross_amount)}</td>
     </tr>
   `).join('');
 
   const additionalCostHTML = offer.additional_costs > 0 ? `
     <tr>
-      <td>${items.length + 1}</td>
+      <td style="text-align: center;">${items.length + 1}</td>
       <td>${offer.additional_costs_description || 'Dodatkowe koszty'}</td>
-      <td>1 usł</td>
-      <td>${formatCurrency(offer.additional_costs)}</td>
-      <td>23%</td>
-      <td>${formatCurrency(offer.additional_costs)}</td>
-      <td>${formatCurrency(offer.additional_costs * 1.23)}</td>
+      <td style="text-align: center;">1 usł</td>
+      <td style="text-align: right;">${formatCurrency(offer.additional_costs)}</td>
+      <td style="text-align: center;">23%</td>
+      <td style="text-align: right;">${formatCurrency(offer.additional_costs)}</td>
+      <td style="text-align: right;">${formatCurrency(offer.additional_costs * 1.23)}</td>
     </tr>
   ` : '';
 
@@ -106,7 +102,7 @@ function generateOfferHTML(offer: any, items: any[]): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oferta ${offer.id}</title>
+    <title>Oferta ${offer.id} - ${offer.client_name}</title>
     <style>
         @page {
             size: A4;
@@ -114,35 +110,43 @@ function generateOfferHTML(offer: any, items: any[]): string {
         }
         
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             font-size: 12px;
             line-height: 1.6;
             color: #333;
             margin: 0;
-            padding: 0;
+            padding: 20px;
+            background: white;
         }
         
         .header {
             margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        .company-info {
+            flex: 1;
         }
         
         .company-name {
             font-size: 24px;
             font-weight: bold;
             margin-bottom: 5px;
+            color: #1f2937;
         }
         
-        .company-info {
+        .company-details {
             font-size: 11px;
             color: #666;
+            line-height: 1.4;
         }
         
         .offer-info {
-            position: absolute;
-            top: 0;
-            right: 0;
             text-align: right;
             font-size: 11px;
+            color: #666;
         }
         
         h1 {
@@ -150,6 +154,7 @@ function generateOfferHTML(offer: any, items: any[]): string {
             margin: 30px 0 20px 0;
             border-bottom: 2px solid #333;
             padding-bottom: 10px;
+            text-align: center;
         }
         
         h2 {
@@ -160,6 +165,15 @@ function generateOfferHTML(offer: any, items: any[]): string {
         
         .client-info {
             margin-bottom: 20px;
+            background-color: #f9fafb;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        
+        .client-name {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
         }
         
         table {
@@ -177,6 +191,11 @@ function generateOfferHTML(offer: any, items: any[]): string {
         th {
             background-color: #f5f5f5;
             font-weight: bold;
+            font-size: 11px;
+        }
+        
+        td {
+            font-size: 11px;
         }
         
         .summary {
@@ -184,28 +203,34 @@ function generateOfferHTML(offer: any, items: any[]): string {
             text-align: right;
         }
         
-        .summary-row {
-            margin: 5px 0;
+        .summary-table {
+            display: inline-block;
+            border: 1px solid #ddd;
         }
         
-        .summary-label {
-            display: inline-block;
-            width: 150px;
+        .summary-table td {
+            border: none;
+            padding: 5px 15px;
+            border-bottom: 1px solid #eee;
         }
         
         .summary-total {
-            font-size: 16px;
             font-weight: bold;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 2px solid #333;
+            font-size: 14px;
+            background-color: #f5f5f5;
         }
         
         .notes {
             margin-top: 30px;
             padding: 15px;
-            background-color: #f9f9f9;
-            border: 1px solid #ddd;
+            background-color: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 4px;
+        }
+        
+        .notes h3 {
+            margin: 0 0 10px 0;
+            color: #92400e;
         }
         
         .footer {
@@ -213,23 +238,65 @@ function generateOfferHTML(offer: any, items: any[]): string {
             text-align: center;
             font-size: 11px;
             color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        
+        .print-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #3B4A5C;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        
+        .print-button:hover {
+            background: #2a3441;
         }
         
         @media print {
             body {
-                print-color-adjust: exact;
-                -webkit-print-color-adjust: exact;
+                padding: 0;
+            }
+            
+            .print-button {
+                display: none;
+            }
+            
+            .header {
+                display: flex;
+            }
+        }
+        
+        @media screen and (max-width: 768px) {
+            .header {
+                flex-direction: column;
+            }
+            
+            .offer-info {
+                text-align: left;
+                margin-top: 15px;
             }
         }
     </style>
 </head>
 <body>
+    <button class="print-button" onclick="window.print()">🖨️ Drukuj PDF</button>
+    
     <div class="header">
-        <div class="company-name">GRUPA ELTRON</div>
         <div class="company-info">
-            ul. Przykładowa 123, 00-000 Warszawa<br>
-            Tel: +48 123 456 789 | Email: kontakt@eltron.pl<br>
-            NIP: 123-456-78-90
+            <div class="company-name">GRUPA ELTRON</div>
+            <div class="company-details">
+                ul. Przykładowa 123, 00-000 Warszawa<br>
+                Tel: +48 123 456 789 | Email: kontakt@eltron.pl<br>
+                NIP: 123-456-78-90
+            </div>
         </div>
         
         <div class="offer-info">
@@ -243,7 +310,7 @@ function generateOfferHTML(offer: any, items: any[]): string {
 
     <div class="client-info">
         <h2>ODBIORCA:</h2>
-        <strong>${offer.client_name}</strong><br>
+        <div class="client-name">${offer.client_name}</div>
         ${offer.client_address ? offer.client_address.replace(/\n/g, '<br>') + '<br>' : ''}
         ${offer.client_nip ? `NIP: ${offer.client_nip}<br>` : ''}
         ${offer.client_email ? `Email: ${offer.client_email}<br>` : ''}
@@ -277,64 +344,33 @@ function generateOfferHTML(offer: any, items: any[]): string {
     </table>
 
     <div class="summary">
-        <div class="summary-row">
-            <span class="summary-label">Wartość netto:</span>
-            <strong>${formatCurrency(offer.total_net)}</strong>
-        </div>
-        <div class="summary-row">
-            <span class="summary-label">VAT 23%:</span>
-            <strong>${formatCurrency(offer.total_vat)}</strong>
-        </div>
-        <div class="summary-row summary-total">
-            <span class="summary-label">RAZEM BRUTTO:</span>
-            <strong>${formatCurrency(offer.total_gross)}</strong>
-        </div>
+        <table class="summary-table">
+            <tr>
+                <td>Wartość netto:</td>
+                <td style="text-align: right;"><strong>${formatCurrency(offer.total_net)}</strong></td>
+            </tr>
+            <tr>
+                <td>VAT 23%:</td>
+                <td style="text-align: right;"><strong>${formatCurrency(offer.total_vat)}</strong></td>
+            </tr>
+            <tr class="summary-total">
+                <td>RAZEM BRUTTO:</td>
+                <td style="text-align: right;"><strong>${formatCurrency(offer.total_gross)}</strong></td>
+            </tr>
+        </table>
     </div>
 
     ${offer.notes ? `
     <div class="notes">
-        <h2>UWAGI:</h2>
+        <h3>UWAGI:</h3>
         <p>${offer.notes.replace(/\n/g, '<br>')}</p>
     </div>
     ` : ''}
 
     <div class="footer">
-        <p>Dziękujemy za zainteresowanie naszą ofertą!</p>
+        <p><strong>Dziękujemy za zainteresowanie naszą ofertą!</strong></p>
         <p>W przypadku pytań prosimy o kontakt telefoniczny lub mailowy.</p>
     </div>
 </body>
 </html>`;
-}
-
-// Przykład funkcji do użycia zewnętrznego API
-async function generatePDFViaAPI(html: string): Promise<Buffer> {
-  // Przykład z api2pdf.com
-  const response = await fetch('https://v2.api2pdf.com/chrome/pdf/html', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.API2PDF_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      html: html,
-      options: {
-        paperFormat: 'A4',
-        printBackground: true,
-        marginTop: '20mm',
-        marginBottom: '20mm',
-        marginLeft: '20mm',
-        marginRight: '20mm',
-      }
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error('PDF generation failed');
-  }
-
-  const result = await response.json();
-  const pdfResponse = await fetch(result.pdf);
-  const pdfBuffer = await pdfResponse.arrayBuffer();
-  
-  return Buffer.from(pdfBuffer);
 }
