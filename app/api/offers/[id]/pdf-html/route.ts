@@ -66,7 +66,7 @@ export async function GET(
 
 function generateOfferHTML(offer: any, items: any[]): string {
   const formatCurrency = (amount: number) => {
-    return `${parseFloat(amount).toFixed(2)} zł`;
+    return `${amount.toFixed(2)} zł`;
   };
 
   const formatDate = (dateString: string) => {
