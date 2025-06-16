@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { usePDFDownload } from '../../../components/PDFGenerator';
 
 interface OfferDetails {
   offer: {
@@ -43,6 +44,9 @@ export default function OfferDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
+  
+  // Hook do generowania PDF po stronie klienta
+  const { downloadPDF } = usePDFDownload();
 
   const offerId = params.id as string;
 
@@ -108,8 +112,11 @@ export default function OfferDetailPage() {
     }
   };
 
-  const downloadPDF = () => {
-    window.open(`/api/offers/${offerId}/pdf`, '_blank');
+  // Nowa funkcja do pobierania PDF po stronie klienta
+  const handleDownloadPDF = () => {
+    if (offer) {
+      downloadPDF(offer.offer.id);
+    }
   };
 
   if (loading) {
@@ -183,7 +190,7 @@ export default function OfferDetailPage() {
 
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={downloadPDF}
+            onClick={handleDownloadPDF}
             className="btn-primary"
           >
             📄 Pobierz PDF
