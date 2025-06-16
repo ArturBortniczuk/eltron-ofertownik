@@ -15,7 +15,8 @@
     "next-auth": "^4.24.5",
     "pg": "^8.11.3",
     "bcryptjs": "^2.4.3",
-    "pdfkit": "^0.14.0"
+    "pdfkit": "^0.14.0",
+    "iconv-lite": "^0.6.3"
   },
   "devDependencies": {
     "@types/node": "^20",
