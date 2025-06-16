@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { PDFButtonWrapper } from '../../components/PDFButtonWrapper';
+import dynamic from 'next/dynamic';
 
 interface Offer {
   id: number;
@@ -27,6 +27,15 @@ interface OffersResponse {
   };
 }
 
+// Dynamicznie importuj komponenty PDF
+const PDFButtonWrapper = dynamic(
+  () => import('../../components/PDFButtonWrapper').then(mod => ({ default: mod.PDFButtonWrapper })),
+  { 
+    ssr: false,
+    loading: () => <span className="text-blue-600 text-sm">⏳</span>
+  }
+);
+
 export default function OffersListPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [pagination, setPagination] = useState({
@@ -40,20 +49,9 @@ export default function OffersListPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Hook do generowania PDF po stronie klienta
-  const { downloadPDF } = usePDFDownload();
-
   useEffect(() => {
     fetchOffers();
   }, [currentPage, statusFilter]);
-  
-  const PDFDownloadButton = dynamic(
-    () => import('../../components/PDFDocument').then(mod => mod.PDFDownloadButton),
-    { 
-      ssr: false,
-      loading: () => <span className="text-blue-600 text-sm">⏳</span>
-    }
-  );
   
   const fetchOffers = async () => {
     setLoading(true);
@@ -115,11 +113,6 @@ export default function OffersListPage() {
   const handleStatusFilter = (status: string) => {
     setStatusFilter(status);
     setCurrentPage(1);
-  };
-
-  // Funkcja do pobierania PDF
-  const handleDownloadPDF = (offerId: number) => {
-    downloadPDF(offerId);
   };
 
   return (
@@ -261,12 +254,7 @@ export default function OffersListPage() {
                         >
                           Podgląd
                         </Link>
-                        <button 
-                          onClick={() => handleDownloadPDF(offer.id)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                          PDF
-                        </button>
+                        <PDFButtonWrapper offerId={offer.id} />
                       </div>
                     </td>
                   </tr>
@@ -305,12 +293,7 @@ export default function OffersListPage() {
                   >
                     Podgląd
                   </Link>
-                  <button 
-                    onClick={() => handleDownloadPDF(offer.id)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    Pobierz PDF
-                  </button>
+                  <PDFButtonWrapper offerId={offer.id} />
                 </div>
               </div>
             ))}
