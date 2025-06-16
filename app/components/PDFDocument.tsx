@@ -292,11 +292,21 @@ export const PDFDownloadButton: React.FC<PDFDownloadButtonProps> = ({ offer, ite
       document={<OfferDocument offer={offer} items={items} />}
       fileName={fileName}
     >
-      {({ blob, url, loading, error }: any) => (
-        <span className="text-blue-600 hover:text-blue-800 text-sm font-medium cursor-pointer">
-          {loading ? '⏳ Generowanie...' : error ? '❌ Błąd' : '📄 PDF'}
-        </span>
-      )}
+      {({ loading, error }) =>
+        loading ? (
+          <span className="text-blue-600 text-sm font-medium cursor-pointer">
+            ⏳ Generowanie...
+          </span>
+        ) : error ? (
+          <span className="text-red-600 text-sm font-medium cursor-pointer">
+            ❌ Błąd
+          </span>
+        ) : (
+          <span className="text-blue-600 hover:text-blue-800 text-sm font-medium cursor-pointer">
+            📄 PDF
+          </span>
+        )
+      }
     </PDFDownloadLink>
   );
 };
