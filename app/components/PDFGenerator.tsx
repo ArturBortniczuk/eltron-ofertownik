@@ -1,6 +1,6 @@
 // app/components/PDFGenerator.tsx - GENEROWANIE PDF PO STRONIE KLIENTA
 'use client';
-
+import "../fonts/Roboto-Regular-normal";
 import { jsPDF } from 'jspdf';
 
 interface OfferData {
