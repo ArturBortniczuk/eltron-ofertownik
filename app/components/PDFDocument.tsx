@@ -1,4 +1,4 @@
-// app/components/PDFDocument.tsx
+// app/components/PDFDocument.tsx - NAPRAWIONA WERSJA
 'use client';
 
 import React from 'react';
@@ -9,11 +9,11 @@ Font.register({
   family: 'Roboto',
   fonts: [
     {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf',
+      src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxKKTU1Kg.woff2',
       fontWeight: 400,
     },
     {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf',
+      src: 'https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBc4AMP6lQ.woff2',
       fontWeight: 700,
     },
   ],
@@ -292,7 +292,7 @@ export const PDFDownloadButton: React.FC<PDFDownloadButtonProps> = ({ offer, ite
       document={<OfferDocument offer={offer} items={items} />}
       fileName={fileName}
     >
-      {({ loading, error }: { loading: boolean; error: Error | null }): JSX.Element => {
+      {({ loading, error }) => {
         if (loading) {
           return <span className="text-blue-600 text-sm font-medium cursor-pointer">⏳ Generowanie...</span>;
         }
@@ -314,8 +314,8 @@ export const PDFDownloadButtonPrimary: React.FC<PDFDownloadButtonProps> = ({ off
       document={<OfferDocument offer={offer} items={items} />}
       fileName={fileName}
     >
-      {({ blob, url, loading, error }: any) => (
-        <button className="btn-primary" disabled={loading || error}>
+      {({ loading, error }) => (
+        <button className="btn-primary" disabled={loading || !!error}>
           {loading ? '⏳ Generowanie PDF...' : error ? '❌ Błąd PDF' : '📄 Pobierz PDF'}
         </button>
       )}
