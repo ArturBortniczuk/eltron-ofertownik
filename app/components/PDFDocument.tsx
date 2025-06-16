@@ -292,7 +292,7 @@ export const PDFDownloadButton: React.FC<PDFDownloadButtonProps> = ({ offer, ite
       document={<OfferDocument offer={offer} items={items} />}
       fileName={fileName}
     >
-      {({ loading, error }): React.ReactElement => {
+      {({ loading, error }): React.ReactNode => {
         if (loading) {
           return (
             <span className="text-blue-600 text-sm font-medium cursor-pointer">
