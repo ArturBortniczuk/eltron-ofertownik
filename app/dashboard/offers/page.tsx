@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 
 interface Offer {
   id: number;
@@ -26,15 +25,6 @@ interface OffersResponse {
     hasPrev: boolean;
   };
 }
-
-// Dynamicznie importuj komponenty PDF
-const PDFButtonWrapper = dynamic(
-  () => import('../../components/PDFButtonWrapper').then(mod => ({ default: mod.PDFButtonWrapper })),
-  { 
-    ssr: false,
-    loading: () => <span className="text-blue-600 text-sm">⏳</span>
-  }
-);
 
 export default function OffersListPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -254,7 +244,7 @@ export default function OffersListPage() {
                         >
                           Podgląd
                         </Link>
-                        <PDFButtonWrapper offerId={offer.id} />
+                        {/* PDF button będzie w szczegółach oferty */}
                       </div>
                     </td>
                   </tr>
@@ -293,7 +283,6 @@ export default function OffersListPage() {
                   >
                     Podgląd
                   </Link>
-                  <PDFButtonWrapper offerId={offer.id} />
                 </div>
               </div>
             ))}
