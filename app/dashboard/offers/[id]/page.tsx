@@ -1,9 +1,12 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePDFDownload } from '../../../components/PDFGenerator';
+// Import nowego komponentu PDF - użyj dynamicznego importu aby uniknąć SSR
+import dynamic from 'next/dynamic';
 
 interface OfferDetails {
   offer: {
@@ -54,6 +57,14 @@ export default function OfferDetailPage() {
     fetchOffer();
   }, [offerId]);
 
+  const PDFDownloadButton = dynamic(
+    () => import('../../../components/PDFDocument').then(mod => mod.PDFDownloadButton),
+    { 
+      ssr: false,
+      loading: () => <button className="btn-primary" disabled>⏳ Ładowanie...</button>
+    }
+  );
+    
   const fetchOffer = async () => {
     try {
       const response = await fetch(`/api/offers/${offerId}`);
