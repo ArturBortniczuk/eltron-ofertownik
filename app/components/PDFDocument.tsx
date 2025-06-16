@@ -278,7 +278,7 @@ const OfferDocument: React.FC<OfferPDFProps> = ({ offer, items }) => {
   );
 };
 
-// Komponent do pobierania PDF
+// Komponent do pobierania PDF - wersja dla listy ofert
 interface PDFDownloadButtonProps {
   offer: OfferPDFProps['offer'];
   items: OfferPDFProps['items'];
@@ -291,12 +291,29 @@ export const PDFDownloadButton: React.FC<PDFDownloadButtonProps> = ({ offer, ite
     <PDFDownloadLink
       document={<OfferDocument offer={offer} items={items} />}
       fileName={fileName}
-      className="btn-primary"
     >
       {({ blob, url, loading, error }: any) => (
-        <span>
-          {loading ? '⏳ Generowanie PDF...' : '📄 Pobierz PDF'}
+        <span className="text-blue-600 hover:text-blue-800 text-sm font-medium cursor-pointer">
+          {loading ? '⏳ Generowanie...' : error ? '❌ Błąd' : '📄 PDF'}
         </span>
+      )}
+    </PDFDownloadLink>
+  );
+};
+
+// Komponent do pobierania PDF - wersja dla strony szczegółów (jako przycisk)
+export const PDFDownloadButtonPrimary: React.FC<PDFDownloadButtonProps> = ({ offer, items }) => {
+  const fileName = `Oferta_${offer.id}_${offer.client_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+  return (
+    <PDFDownloadLink
+      document={<OfferDocument offer={offer} items={items} />}
+      fileName={fileName}
+    >
+      {({ blob, url, loading, error }: any) => (
+        <button className="btn-primary" disabled={loading || error}>
+          {loading ? '⏳ Generowanie PDF...' : error ? '❌ Błąd PDF' : '📄 Pobierz PDF'}
+        </button>
       )}
     </PDFDownloadLink>
   );
