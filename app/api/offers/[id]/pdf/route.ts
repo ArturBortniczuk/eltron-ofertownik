@@ -6,7 +6,7 @@ import { db } from '../../../../../lib/db';
 import { jsPDF } from 'jspdf';
 
 // Dodaj podstawowe polskie znaki jako unicode
-function addPolishText(doc: jsPDF, text: string, x: number, y: number, options: any = {}) {
+function addPolishText(doc: jsPDF, text: string, x: number, y: number, options: Record<string, any> = {}) {
   if (!text) return;
   
   // Konwersja polskich znaków na unicode escape sequences dla jsPDF
@@ -119,7 +119,7 @@ export async function GET(
       yPos += 6;
       // Obsłuż wieloliniowe adresy
       const addressLines = offer.client_address.split('\n');
-      addressLines.forEach(line => {
+      addressLines.forEach((line: string) => {
         addPolishText(doc, line.trim(), 20, yPos);
         yPos += 5;
       });
@@ -191,7 +191,7 @@ export async function GET(
       
       // Długie nazwy produktów - podziel na linie
       const maxWidth = 80;
-      const productLines = doc.splitTextToSize(item.product_name, maxWidth);
+      const productLines = doc.splitTextToSize(item.product_name, maxWidth) as string[];
       let lineY = currentY;
       productLines.forEach((line: string) => {
         addPolishText(doc, line, 35, lineY);
@@ -264,7 +264,7 @@ export async function GET(
       doc.setFont('helvetica', 'normal');
       
       // Podziel długie uwagi na linie
-      const notesLines = doc.splitTextToSize(offer.notes, 170);
+      const notesLines = doc.splitTextToSize(offer.notes, 170) as string[];
       notesLines.forEach((line: string) => {
         addPolishText(doc, line, 20, currentY);
         currentY += 5;
