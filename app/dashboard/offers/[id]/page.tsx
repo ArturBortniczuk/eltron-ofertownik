@@ -1,10 +1,8 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-// Import nowego komponentu PDF - użyj dynamicznego importu aby uniknąć SSR
 import dynamic from 'next/dynamic';
 
 interface OfferDetails {
@@ -39,6 +37,15 @@ interface OfferDetails {
   }>;
 }
 
+// Dynamiczny import komponentów PDF
+const PDFDownloadButtonPrimary = dynamic(
+  () => import('../../../components/PDFDocument').then(mod => mod.PDFDownloadButtonPrimary),
+  { 
+    ssr: false,
+    loading: () => <button className="btn-primary" disabled>⏳ Ładowanie...</button>
+  }
+);
+
 export default function OfferDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -46,23 +53,12 @@ export default function OfferDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(false);
-  
-  // Hook do generowania PDF po stronie klienta
-  const { downloadPDF } = usePDFDownload();
 
   const offerId = params.id as string;
 
   useEffect(() => {
     fetchOffer();
   }, [offerId]);
-
-  const PDFDownloadButtonPrimary = dynamic(
-    () => import('../../../components/PDFDocument').then(mod => mod.PDFDownloadButtonPrimary),
-    { 
-      ssr: false,
-      loading: () => <button className="btn-primary" disabled>⏳ Ładowanie...</button>
-    }
-  );
       
   const fetchOffer = async () => {
     try {
@@ -119,13 +115,6 @@ export default function OfferDetailPage() {
       }
     } catch (err) {
       setError('Błąd usuwania oferty');
-    }
-  };
-
-  // Nowa funkcja do pobierania PDF po stronie klienta
-  const handleDownloadPDF = () => {
-    if (offer) {
-      downloadPDF(offer.offer.id);
     }
   };
 
@@ -199,12 +188,12 @@ export default function OfferDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleDownloadPDF}
-            className="btn-primary"
-          >
-            📄 Pobierz PDF
-          </button>
+          {offer && (
+            <PDFDownloadButtonPrimary 
+              offer={offer.offer} 
+              items={offer.items} 
+            />
+          )}
           
           {offer.offer.status === 'draft' && (
             <button
