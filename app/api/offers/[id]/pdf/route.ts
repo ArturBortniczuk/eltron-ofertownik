@@ -192,9 +192,9 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('PDF generation error:', error);
+    console.error('PDF generation error:', error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { error: 'Błąd generowania PDF' },
+      { error: `Błąd generowania PDF: ${error instanceof Error ? error.message : 'Nieznany błąd'}` },
       { status: 500 }
     );
   }
