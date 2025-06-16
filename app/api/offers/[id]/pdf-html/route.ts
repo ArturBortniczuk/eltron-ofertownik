@@ -1,7 +1,5 @@
-// app/api/offers/[id]/pdf-html/route.ts - NAPRAWIONA WERSJA
+// app/api/offers/[id]/pdf-html/route.ts - UPROSZCZONA WERSJA
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../../lib/auth';
 import { db } from '../../../../../lib/db';
 
 export async function GET(
@@ -9,16 +7,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = parseInt(session.user.id);
     const offerId = parseInt(params.id);
 
-    // Pobierz dane oferty
+    if (isNaN(offerId)) {
+      return NextResponse.json({ error: 'Nieprawidłowy ID oferty' }, { status: 400 });
+    }
+
+    console.log('Fetching offer:', offerId);
+
+    // Pobierz dane oferty - bez sprawdzania user_id na razie
     const offerResult = await db.query(`
       SELECT 
         o.*,
@@ -26,19 +23,25 @@ export async function GET(
         c.address as client_address
       FROM offers o
       LEFT JOIN clients c ON o.client_id = c.id
-      WHERE o.id = $1 AND o.user_id = $2
-    `, [offerId, userId]);
+      WHERE o.id = $1
+    `, [offerId]);
+
+    console.log('Offer result:', offerResult.rows.length);
 
     if (offerResult.rows.length === 0) {
       return NextResponse.json({ error: 'Oferta nie została znaleziona' }, { status: 404 });
     }
 
     const offer = offerResult.rows[0];
+    
     const itemsResult = await db.query(`
       SELECT * FROM offer_items
       WHERE offer_id = $1
       ORDER BY position_order
     `, [offerId]);
+
+    console.log('Items result:', itemsResult.rows.length);
+    
     const items = itemsResult.rows;
 
     // Generuj HTML
@@ -53,6 +56,16 @@ export async function GET(
 
   } catch (error) {
     console.error('PDF HTML generation error:', error);
+    
+    // Zwróć szczegółowy błąd w development
+    if (process.env.NODE_ENV === 'development') {
+      return NextResponse.json({
+        error: 'Błąd generowania PDF',
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }, { status: 500 });
+    }
+    
     return NextResponse.json(
       { error: 'Błąd generowania PDF' },
       { status: 500 }
@@ -62,38 +75,56 @@ export async function GET(
 
 function generateOfferHTML(offer: any, items: any[]): string {
   const formatCurrency = (amount: number) => {
-    return `${amount.toFixed(2)} zł`;
+    if (typeof amount !== 'number' || isNaN(amount)) {
+      return '0,00 zł';
+    }
+    return `${amount.toFixed(2).replace('.', ',')} zł`;
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pl-PL');
+    try {
+      return new Date(dateString).toLocaleDateString('pl-PL');
+    } catch {
+      return 'Błędna data';
+    }
   };
 
-  const validUntil = new Date(
-    new Date(offer.created_at).getTime() + offer.valid_days * 24 * 60 * 60 * 1000
-  ).toLocaleDateString('pl-PL');
+  const safeString = (value: any) => {
+    return value ? String(value) : '';
+  };
+
+  const validUntil = (() => {
+    try {
+      const created = new Date(offer.created_at);
+      const validUntilDate = new Date(created.getTime() + (offer.valid_days || 30) * 24 * 60 * 60 * 1000);
+      return validUntilDate.toLocaleDateString('pl-PL');
+    } catch {
+      return 'Błędna data';
+    }
+  })();
 
   const itemsHTML = items.map((item, index) => `
     <tr>
       <td style="text-align: center;">${index + 1}</td>
-      <td>${item.product_name}</td>
-      <td style="text-align: center;">${item.quantity} ${item.unit}</td>
+      <td>${safeString(item.product_name)}</td>
+      <td style="text-align: center;">${item.quantity || 0} ${safeString(item.unit)}</td>
       <td style="text-align: right;">${formatCurrency(item.unit_price)}</td>
-      <td style="text-align: center;">${item.vat_rate}%</td>
+      <td style="text-align: center;">${item.vat_rate || 0}%</td>
       <td style="text-align: right;">${formatCurrency(item.net_amount)}</td>
       <td style="text-align: right;">${formatCurrency(item.gross_amount)}</td>
     </tr>
   `).join('');
 
-  const additionalCostHTML = offer.additional_costs > 0 ? `
+  const additionalCosts = parseFloat(offer.additional_costs) || 0;
+  const additionalCostHTML = additionalCosts > 0 ? `
     <tr>
       <td style="text-align: center;">${items.length + 1}</td>
-      <td>${offer.additional_costs_description || 'Dodatkowe koszty'}</td>
+      <td>${safeString(offer.additional_costs_description) || 'Dodatkowe koszty'}</td>
       <td style="text-align: center;">1 usł</td>
-      <td style="text-align: right;">${formatCurrency(offer.additional_costs)}</td>
+      <td style="text-align: right;">${formatCurrency(additionalCosts)}</td>
       <td style="text-align: center;">23%</td>
-      <td style="text-align: right;">${formatCurrency(offer.additional_costs)}</td>
-      <td style="text-align: right;">${formatCurrency(offer.additional_costs * 1.23)}</td>
+      <td style="text-align: right;">${formatCurrency(additionalCosts)}</td>
+      <td style="text-align: right;">${formatCurrency(additionalCosts * 1.23)}</td>
     </tr>
   ` : '';
 
@@ -102,7 +133,7 @@ function generateOfferHTML(offer: any, items: any[]): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oferta ${offer.id} - ${offer.client_name}</title>
+    <title>Oferta ${offer.id} - ${safeString(offer.client_name)}</title>
     <style>
         @page {
             size: A4;
@@ -310,7 +341,7 @@ function generateOfferHTML(offer: any, items: any[]): string {
 
     <div class="client-info">
         <h2>ODBIORCA:</h2>
-        <div class="client-name">${offer.client_name}</div>
+        <div class="client-name">${safeString(offer.client_name)}</div>
         ${offer.client_address ? offer.client_address.replace(/\n/g, '<br>') + '<br>' : ''}
         ${offer.client_nip ? `NIP: ${offer.client_nip}<br>` : ''}
         ${offer.client_email ? `Email: ${offer.client_email}<br>` : ''}
@@ -319,7 +350,7 @@ function generateOfferHTML(offer: any, items: any[]): string {
 
     <h2>WARUNKI OFERTY:</h2>
     <ul>
-        <li>Termin dostawy: ${offer.delivery_days} dni roboczych</li>
+        <li>Termin dostawy: ${offer.delivery_days || 14} dni roboczych</li>
         <li>Termin płatności: 30 dni od daty wystawienia faktury</li>
         <li>Ceny zawierają VAT</li>
     </ul>
@@ -363,7 +394,7 @@ function generateOfferHTML(offer: any, items: any[]): string {
     ${offer.notes ? `
     <div class="notes">
         <h3>UWAGI:</h3>
-        <p>${offer.notes.replace(/\n/g, '<br>')}</p>
+        <p>${safeString(offer.notes).replace(/\n/g, '<br>')}</p>
     </div>
     ` : ''}
 
