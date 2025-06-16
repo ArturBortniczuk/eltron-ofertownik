@@ -7,6 +7,13 @@ const nextConfig = {
   // Wyłącz React Strict Mode
   reactStrictMode: false,
   
+  // Konfiguracja dla @react-pdf/renderer
+  webpack: (config) => {
+    config.resolve.alias.canvas = false;
+    config.resolve.alias.encoding = false;
+    return config;
+  },
+  
   async redirects() {
     return [
       {
