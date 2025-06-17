@@ -1,4 +1,4 @@
-// app/dashboard/layout.tsx - ZAKTUALIZOWANA WERSJA Z ROLAMI
+// app/dashboard/layout.tsx - NAPRAWIONA WERSJA BEZ IMPORTU lib/auth
 'use client';
 
 import { useSession, signOut } from 'next-auth/react';
@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import ClientOnly from '../components/ClientOnly';
+import { 
+  canAccessAllData, 
+  canManageUsers, 
+  getRoleDisplayName, 
+  getRoleBadgeColor 
+} from '../../lib/client-auth-utils';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -37,31 +43,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const userMarketRegion = (session.user as any)?.marketRegion;
   const firstName = (session.user as any)?.firstName || session.user?.name?.split(' ')[0] || 'Użytkownik';
 
-  const getRoleDisplayName = (role: string) => {
-    const roleMap: Record<string, string> = {
-      'handlowiec': 'Handlowiec',
-      'zarząd': 'Zarząd',
-      'centrum elektryczne': 'Centrum Elektryczne',
-      'budowy': 'Budowy',
-      'inne': 'Inne'
-    };
-    return roleMap[role] || role;
-  };
-
-  const getRoleBadgeColor = (role: string) => {
-    const colorMap: Record<string, string> = {
-      'handlowiec': 'bg-blue-100 text-blue-800',
-      'zarząd': 'bg-purple-100 text-purple-800',
-      'centrum elektryczne': 'bg-green-100 text-green-800',
-      'budowy': 'bg-orange-100 text-orange-800',
-      'inne': 'bg-gray-100 text-gray-800'
-    };
-    return colorMap[role] || 'bg-gray-100 text-gray-800';
-  };
-
   // Określ dostępne funkcje na podstawie roli
-  const canViewAllOffers = ['zarząd', 'centrum elektryczne'].includes(userRole);
-  const canManageUsers = userRole === 'zarząd';
+  const canViewAllOffers = canAccessAllData(session);
+  const canManageUsersPermission = canManageUsers(session);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,7 +83,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               </Link>
               
               {/* Dodatkowe opcje dla zarządu */}
-              {canManageUsers && (
+              {canManageUsersPermission && (
                 <Link 
                   href="/dashboard/admin" 
                   className="text-gray-600 hover:text-eltron-primary transition-colors"
@@ -166,7 +150,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           >
             Oferty
           </Link>
-          {canManageUsers && (
+          {canManageUsersPermission && (
             <Link 
               href="/dashboard/admin" 
               className="text-gray-600 hover:text-eltron-primary text-sm transition-colors whitespace-nowrap"
