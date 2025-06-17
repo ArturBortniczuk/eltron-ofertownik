@@ -1,7 +1,6 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { canAccessAllData } from '../../../lib/auth';
 import MarginDashboard from '../../components/MarginDashboard';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -9,6 +8,11 @@ import { useEffect } from 'react';
 export default function MarginDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+
+  // Funkcja do sprawdzenia uprawnień (bez importowania lib/auth)
+  const canAccessAllData = (session: any): boolean => {
+    return ['zarząd', 'centrum elektryczne'].includes(session?.user?.role);
+  };
 
   useEffect(() => {
     if (status === 'loading') return;
