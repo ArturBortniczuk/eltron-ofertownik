@@ -1,10 +1,11 @@
-// app/dashboard/offers/new/page.tsx - NAPRAWIONA WERSJA
+// app/dashboard/offers/new/page.tsx - ROZSZERZONA WERSJA Z MARŻAMI
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import PricingManager from '../../../components/PricingManager';
 
 interface Client {
   id: number;
@@ -25,6 +26,11 @@ interface OfferItem {
   net_amount: number;
   vat_amount: number;
   gross_amount: number;
+  // Nowe pola dla marż
+  cost_price: number;
+  margin_percent: number;
+  discount_percent: number;
+  original_price: number;
 }
 
 interface ProductSuggestion {
@@ -70,7 +76,11 @@ export default function NewOfferPage() {
     vat_rate: 23,
     net_amount: 0,
     vat_amount: 0,
-    gross_amount: 0
+    gross_amount: 0,
+    cost_price: 0,
+    margin_percent: 0,
+    discount_percent: 0,
+    original_price: 0
   });
   
   // Podpowiedzi produktów
@@ -79,6 +89,7 @@ export default function NewOfferPage() {
   // Stan UI
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showMarginWarning, setShowMarginWarning] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -169,6 +180,29 @@ export default function NewOfferPage() {
     });
   };
 
+  // Obsługa danych z PricingManager
+  const handlePriceSelect = (priceData: {
+    unit_price: number;
+    cost_price: number;
+    margin_percent: number;
+    discount_percent: number;
+    original_price: number;
+  }) => {
+    const updatedItem = {
+      ...currentItem,
+      unit_price: priceData.unit_price,
+      cost_price: priceData.cost_price,
+      margin_percent: priceData.margin_percent,
+      discount_percent: priceData.discount_percent,
+      original_price: priceData.original_price
+    };
+    
+    // Sprawdź czy marża nie jest za niska
+    setShowMarginWarning(priceData.margin_percent < 10);
+    
+    calculateAmounts(updatedItem);
+  };
+
   const calculateAmounts = (item: OfferItem) => {
     const netAmount = item.quantity * item.unit_price;
     const vatAmount = netAmount * (item.vat_rate / 100);
@@ -201,6 +235,15 @@ export default function NewOfferPage() {
       return;
     }
 
+    // Sprawdź marżę przed dodaniem
+    if (currentItem.cost_price > 0 && currentItem.margin_percent < 5) {
+      const confirmed = confirm(
+        `Marża wynosi tylko ${currentItem.margin_percent.toFixed(1)}%. ` +
+        'Czy na pewno chcesz dodać tę pozycję?'
+      );
+      if (!confirmed) return;
+    }
+
     setItems(prev => [...prev, { ...currentItem }]);
     setCurrentItem({
       product_name: '',
@@ -210,10 +253,15 @@ export default function NewOfferPage() {
       vat_rate: 23,
       net_amount: 0,
       vat_amount: 0,
-      gross_amount: 0
+      gross_amount: 0,
+      cost_price: 0,
+      margin_percent: 0,
+      discount_percent: 0,
+      original_price: 0
     });
     setError('');
     setProductSuggestions([]);
+    setShowMarginWarning(false);
   };
 
   const removeItem = (index: number) => {
@@ -221,14 +269,23 @@ export default function NewOfferPage() {
   };
 
   const calculateTotals = () => {
-    const totalNet = items.reduce((sum, item) => sum + item.net_amount, 0) + additionalCosts;
+    const itemTotalNet = items.reduce((sum, item) => sum + item.net_amount, 0);
+    const itemTotalCost = items.reduce((sum, item) => sum + (item.cost_price * item.quantity), 0);
+    
+    const totalNet = itemTotalNet + additionalCosts;
     const totalVat = items.reduce((sum, item) => sum + item.vat_amount, 0) + (additionalCosts * 0.23);
     const totalGross = totalNet + totalVat;
+    const totalCost = itemTotalCost + (additionalCosts * 0.8); // Zakładamy 20% marżę na dodatkowe koszty
+    const totalMargin = totalNet - totalCost;
+    const marginPercent = totalCost > 0 ? (totalMargin / totalCost) * 100 : 0;
 
     return {
       net: Math.round(totalNet * 100) / 100,
       vat: Math.round(totalVat * 100) / 100,
-      gross: Math.round(totalGross * 100) / 100
+      gross: Math.round(totalGross * 100) / 100,
+      cost: Math.round(totalCost * 100) / 100,
+      margin: Math.round(totalMargin * 100) / 100,
+      marginPercent: Math.round(marginPercent * 100) / 100
     };
   };
 
@@ -243,12 +300,21 @@ export default function NewOfferPage() {
       return;
     }
 
+    const totals = calculateTotals();
+    
+    // Sprawdź średnią marżę przed zapisaniem
+    if (totals.marginPercent < 10 && status === 'sent') {
+      const confirmed = confirm(
+        `Średnia marża wynosi tylko ${totals.marginPercent.toFixed(1)}%. ` +
+        'Czy na pewno chcesz wysłać tę ofertę?'
+      );
+      if (!confirmed) return;
+    }
+
     setSaving(true);
     setError('');
 
     try {
-      const totals = calculateTotals();
-      
       const offerData = {
         client_id: selectedClient.id,
         client_name: selectedClient.name,
@@ -318,10 +384,7 @@ export default function NewOfferPage() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-gray-900">Wybierz klienta</h2>
-            <Link
-              href="/dashboard/clients/new"
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
-            >
+            <Link href="/dashboard/clients/new" className="btn-secondary">
               ➕ Dodaj nowego klienta
             </Link>
           </div>
@@ -332,7 +395,7 @@ export default function NewOfferPage() {
               value={clientSearch}
               onChange={(e) => setClientSearch(e.target.value)}
               placeholder="Szukaj klientów..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input-field"
             />
           </div>
 
@@ -347,10 +410,7 @@ export default function NewOfferPage() {
                   ? 'Spróbuj innych słów kluczowych lub dodaj nowego klienta.'
                   : 'Dodaj pierwszego klienta, aby móc tworzyć oferty.'}
               </p>
-              <Link
-                href="/dashboard/clients/new"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-              >
+              <Link href="/dashboard/clients/new" className="btn-primary">
                 Dodaj klienta
               </Link>
             </div>
@@ -360,9 +420,9 @@ export default function NewOfferPage() {
                 <button
                   key={client.id}
                   onClick={() => selectClient(client)}
-                  className="text-left p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group"
+                  className="text-left p-4 border border-gray-200 rounded-lg hover:border-eltron-primary hover:bg-eltron-primary/5 transition-colors group"
                 >
-                  <div className="font-medium text-gray-900 group-hover:text-blue-600 mb-2">
+                  <div className="font-medium text-gray-900 group-hover:text-eltron-primary mb-2">
                     {client.name}
                   </div>
                   {client.contact_person && (
@@ -390,7 +450,7 @@ export default function NewOfferPage() {
           {/* Główny formularz */}
           <div className="lg:col-span-2 space-y-6">
             {/* Wybrany klient */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="card">
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">Wybrany klient</h2>
@@ -409,7 +469,7 @@ export default function NewOfferPage() {
                 </div>
                 <button
                   onClick={() => setShowClientSelector(true)}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
+                  className="btn-secondary"
                 >
                   Zmień klienta
                 </button>
@@ -417,7 +477,7 @@ export default function NewOfferPage() {
             </div>
 
             {/* Parametry oferty */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Parametry oferty</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -428,7 +488,7 @@ export default function NewOfferPage() {
                     type="number"
                     value={deliveryDays}
                     onChange={(e) => setDeliveryDays(parseInt(e.target.value) || 14)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="input-field"
                     min="1"
                   />
                 </div>
@@ -440,7 +500,7 @@ export default function NewOfferPage() {
                     type="number"
                     value={validDays}
                     onChange={(e) => setValidDays(parseInt(e.target.value) || 30)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="input-field"
                     min="1"
                   />
                 </div>
@@ -448,7 +508,7 @@ export default function NewOfferPage() {
             </div>
 
             {/* Dodawanie pozycji */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Dodaj pozycję</h2>
               
               <div className="space-y-4">
@@ -460,7 +520,7 @@ export default function NewOfferPage() {
                     type="text"
                     value={currentItem.product_name}
                     onChange={(e) => handleProductNameChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="input-field"
                     placeholder="Zacznij pisać nazwę produktu..."
                   />
                 </div>
@@ -474,7 +534,7 @@ export default function NewOfferPage() {
                       type="number"
                       value={currentItem.quantity}
                       onChange={(e) => handleItemChange('quantity', parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="input-field"
                       min="0"
                       step="0.001"
                     />
@@ -486,7 +546,7 @@ export default function NewOfferPage() {
                     <select
                       value={currentItem.unit}
                       onChange={(e) => handleItemChange('unit', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="input-field"
                     >
                       <option value="szt">szt</option>
                       <option value="m">m</option>
@@ -504,7 +564,7 @@ export default function NewOfferPage() {
                       type="number"
                       value={currentItem.unit_price}
                       onChange={(e) => handleItemChange('unit_price', parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="input-field"
                       min="0"
                       step="0.01"
                     />
@@ -516,7 +576,7 @@ export default function NewOfferPage() {
                     <select
                       value={currentItem.vat_rate}
                       onChange={(e) => handleItemChange('vat_rate', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="input-field"
                     >
                       <option value="23">23%</option>
                       <option value="8">8%</option>
@@ -528,18 +588,40 @@ export default function NewOfferPage() {
                     <button
                       type="button"
                       onClick={addItem}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                      className="w-full btn-primary"
                     >
                       Dodaj
                     </button>
                   </div>
                 </div>
 
+                {/* PricingManager - nowy komponent do zarządzania cenami i marżami */}
+                {currentItem.product_name.length >= 2 && (
+                  <PricingManager
+                    productName={currentItem.product_name}
+                    clientId={selectedClient?.id}
+                    onPriceSelect={handlePriceSelect}
+                  />
+                )}
+
+                {/* Ostrzeżenie o niskiej marży */}
+                {showMarginWarning && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <div className="text-yellow-600 mr-2">⚠️</div>
+                      <div className="text-yellow-700">
+                        <strong>Uwaga:</strong> Marża jest bardzo niska ({currentItem.margin_percent.toFixed(1)}%). 
+                        Sprawdź czy cena jest prawidłowa.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Podgląd kwot aktualnej pozycji */}
-                {currentItem.product_name && (
+                {currentItem.product_name && currentItem.unit_price > 0 && (
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="text-sm text-gray-600 mb-2">Podgląd pozycji:</div>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-gray-600">Netto:</span>
                         <span className="font-medium ml-2">{currentItem.net_amount.toFixed(2)} zł</span>
@@ -552,6 +634,17 @@ export default function NewOfferPage() {
                         <span className="text-gray-600">Brutto:</span>
                         <span className="font-medium ml-2">{currentItem.gross_amount.toFixed(2)} zł</span>
                       </div>
+                      {currentItem.cost_price > 0 && (
+                        <div>
+                          <span className="text-gray-600">Marża:</span>
+                          <span className={`font-medium ml-2 ${
+                            currentItem.margin_percent >= 15 ? 'text-green-600' : 
+                            currentItem.margin_percent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            {currentItem.margin_percent.toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -559,98 +652,77 @@ export default function NewOfferPage() {
             </div>
 
             {/* Historia produktów */}
-            {currentItem.product_name.length >= 2 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            {currentItem.product_name.length >= 2 && productSuggestions.length > 0 && (
+              <div className="card">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-semibold text-gray-900">
                     Historia produktów ({productSuggestions.length})
                   </h2>
-                  {currentItem.product_name && (
-                    <div className="text-sm text-gray-600">
-                      Wyszukiwanie: "<span className="font-medium">{currentItem.product_name}</span>"
-                    </div>
-                  )}
+                  <div className="text-sm text-gray-600">
+                    Wyszukiwanie: "<span className="font-medium">{currentItem.product_name}</span>"
+                  </div>
                 </div>
                 
-                {productSuggestions.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-medium text-gray-700">Nazwa produktu</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-700">Jedn.</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-700">Ostatnia cena</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-700">Używane</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-700">Ceny (min-max)</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-700">Ostatnio</th>
-                          <th className="text-left py-3 px-2 font-medium text-gray-700">Akcja</th>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-2 font-medium text-gray-700">Nazwa produktu</th>
+                        <th className="text-left py-3 px-2 font-medium text-gray-700">Jedn.</th>
+                        <th className="text-left py-3 px-2 font-medium text-gray-700">Ostatnia cena</th>
+                        <th className="text-left py-3 px-2 font-medium text-gray-700">Używane</th>
+                        <th className="text-left py-3 px-2 font-medium text-gray-700">Ostatnio</th>
+                        <th className="text-left py-3 px-2 font-medium text-gray-700">Akcja</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productSuggestions.map((product, index) => (
+                        <tr key={index} className="table-row">
+                          <td className="py-3 px-2">
+                            <div className="font-medium text-gray-900">{product.name}</div>
+                          </td>
+                          <td className="py-3 px-2">
+                            <span className="text-sm bg-gray-100 px-2 py-1 rounded">{product.unit}</span>
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="font-bold text-eltron-primary">
+                              {product.last_price.toFixed(2)} zł
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              śr. {product.avg_price.toFixed(2)} zł
+                            </div>
+                          </td>
+                          <td className="py-3 px-2">
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                              {product.usage_count}x
+                            </span>
+                          </td>
+                          <td className="py-3 px-2 text-sm text-gray-600">
+                            <div>{product.last_used_by}</div>
+                            <div className="text-xs">
+                              {new Date(product.last_used_at).toLocaleDateString('pl-PL')}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2">
+                            <button
+                              type="button"
+                              onClick={() => selectProduct(product)}
+                              className="btn-primary text-sm"
+                            >
+                              Użyj
+                            </button>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {productSuggestions.map((product, index) => (
-                          <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors duration-150">
-                            <td className="py-3 px-2">
-                              <div className="font-medium text-gray-900">{product.name}</div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <span className="text-sm bg-gray-100 px-2 py-1 rounded">{product.unit}</span>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="font-bold text-blue-600">
-                                {product.last_price.toFixed(2)} zł
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                śr. {product.avg_price.toFixed(2)} zł
-                              </div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                                {product.usage_count}x
-                              </span>
-                            </td>
-                            <td className="py-3 px-2 text-sm text-gray-600">
-                              {product.min_price.toFixed(2)} - {product.max_price.toFixed(2)} zł
-                            </td>
-                            <td className="py-3 px-2 text-sm text-gray-600">
-                              <div>{product.last_used_by}</div>
-                              <div className="text-xs">
-                                {new Date(product.last_used_at).toLocaleDateString('pl-PL')}
-                              </div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <button
-                                type="button"
-                                onClick={() => selectProduct(product)}
-                                className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-blue-700 transition-colors"
-                              >
-                                Użyj
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 bg-gray-50 rounded-lg">
-                    <div className="text-4xl mb-4">🔍</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Nie znaleziono produktów w historii ofert
-                    </h3>
-                    <p className="text-gray-600">
-                      Brak produktów pasujących do frazy "<span className="font-medium">{currentItem.product_name}</span>"
-                    </p>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Możesz wpisać pełną nazwę produktu i dodać go ręcznie
-                    </p>
-                  </div>
-                )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
             {/* Lista dodanych pozycji */}
             {items.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="card">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Pozycje w ofercie</h2>
                 <div className="space-y-3">
                   {items.map((item, index) => (
@@ -661,6 +733,20 @@ export default function NewOfferPage() {
                           {item.quantity} {item.unit} × {item.unit_price.toFixed(2)} zł 
                           = {item.gross_amount.toFixed(2)} zł brutto
                         </div>
+                        {item.cost_price > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Koszt: {item.cost_price.toFixed(2)} zł | 
+                            Marża: <span className={`font-medium ${
+                              item.margin_percent >= 15 ? 'text-green-600' : 
+                              item.margin_percent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                              {item.margin_percent.toFixed(1)}%
+                            </span>
+                            {item.discount_percent > 0 && (
+                              <span> | Rabat: {item.discount_percent.toFixed(1)}%</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={() => removeItem(index)}
@@ -675,7 +761,7 @@ export default function NewOfferPage() {
             )}
 
             {/* Dodatkowe koszty */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Dodatkowe koszty</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -686,7 +772,7 @@ export default function NewOfferPage() {
                     type="number"
                     value={additionalCosts}
                     onChange={(e) => setAdditionalCosts(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="input-field"
                     min="0"
                     step="0.01"
                   />
@@ -699,7 +785,7 @@ export default function NewOfferPage() {
                     type="text"
                     value={additionalCostsDescription}
                     onChange={(e) => setAdditionalCostsDescription(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="input-field"
                     placeholder="np. Transport, montaż"
                   />
                 </div>
@@ -707,12 +793,12 @@ export default function NewOfferPage() {
             </div>
 
             {/* Uwagi */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Uwagi</h2>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="input-field"
                 rows={4}
                 placeholder="Dodatkowe informacje dla klienta..."
               />
@@ -721,7 +807,7 @@ export default function NewOfferPage() {
 
           {/* Sidebar z podsumowaniem */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-4">
+            <div className="card sticky top-4">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Podsumowanie</h2>
               
               <div className="space-y-3 mb-6">
@@ -742,17 +828,51 @@ export default function NewOfferPage() {
                 
                 <div className="flex justify-between border-t border-gray-200 pt-3">
                   <span className="text-lg font-semibold">RAZEM:</span>
-                  <span className="text-lg font-bold text-blue-600">
+                  <span className="text-lg font-bold text-eltron-primary">
                     {totals.gross.toFixed(2)} zł
                   </span>
                 </div>
+
+                {/* Podsumowanie marż */}
+                {totals.cost > 0 && (
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Koszt całkowity:</span>
+                      <span className="font-medium">{totals.cost.toFixed(2)} zł</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Zysk całkowity:</span>
+                      <span className={`font-medium ${totals.margin > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {totals.margin.toFixed(2)} zł
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Średnia marża:</span>
+                      <span className={`font-bold ${
+                        totals.marginPercent >= 15 ? 'text-green-600' : 
+                        totals.marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {totals.marginPercent.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Ostrzeżenie o niskiej marży */}
+              {totals.cost > 0 && totals.marginPercent < 10 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <div className="text-red-700 text-sm">
+                    <strong>⚠️ Uwaga:</strong> Średnia marża jest bardzo niska!
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <button
                   onClick={() => saveOffer('draft')}
                   disabled={saving}
-                  className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                  className="w-full btn-secondary disabled:opacity-50"
                 >
                   {saving ? 'Zapisywanie...' : '💾 Zapisz jako szkic'}
                 </button>
@@ -760,7 +880,7 @@ export default function NewOfferPage() {
                 <button
                   onClick={() => saveOffer('sent')}
                   disabled={saving}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                  className="w-full btn-primary disabled:opacity-50"
                 >
                   {saving ? 'Zapisywanie...' : '📤 Zapisz i wyślij'}
                 </button>
