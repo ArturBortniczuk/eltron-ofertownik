@@ -6,26 +6,27 @@ const nextConfig = {
   
   reactStrictMode: false,
   
-  experimental: {
-    webpackBuildWorker: false, // Wyłącz na czas buildu
-  },
-  
   webpack: (config, { isServer, webpack }) => {
-    // Napraw problemy z pg i cloudflare
+    // Dodaj plugin do ignorowania problematycznych modułów
     config.plugins.push(
       new webpack.IgnorePlugin({
-        resourceRegExp: /^(cloudflare:sockets|pg-cloudflare)$/,
+        resourceRegExp: /^cloudflare:sockets$/,
+      }),
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^pg-cloudflare$/,
       })
     );
 
+    // Konfiguracja dla client-side - całkowicie blokuj pg
     if (!isServer) {
       config.resolve.alias = {
         ...config.resolve.alias,
-        canvas: false,
-        encoding: false,
+        'pg': false,
         'pg-native': false,
         'pg-cloudflare': false,
         'cloudflare:sockets': false,
+        canvas: false,
+        encoding: false,
       };
       
       config.resolve.fallback = {
@@ -42,13 +43,15 @@ const nextConfig = {
         assert: false,
         os: false,
         path: false,
+        dns: false,
+        child_process: false,
         'cloudflare:sockets': false,
       };
     }
     
-    // Ignoruj problematyczne moduły
-    config.externals = config.externals || [];
+    // Konfiguracja dla server-side
     if (isServer) {
+      config.externals = config.externals || [];
       config.externals.push('pg-native');
       config.externals.push('cloudflare:sockets');
       config.externals.push('pg-cloudflare');
