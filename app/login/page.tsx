@@ -1,8 +1,10 @@
+// app/login/page.tsx - ZAKTUALIZOWANA WERSJA
 'use client';
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { signIn, getSession } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import ClientOnly from '../components/ClientOnly';
 
 function LoginForm() {
@@ -10,7 +12,26 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Sprawdź czy użytkownik jest już zalogowany
+    getSession().then(session => {
+      if (session) {
+        router.push('/dashboard');
+      }
+    });
+
+    // Sprawdź wiadomości z URL
+    const urlMessage = searchParams?.get('message');
+    if (urlMessage === 'registration_success') {
+      setMessage('Konto zostało utworzone pomyślnie! Możesz się teraz zalogować.');
+    } else if (urlMessage === 'session_expired') {
+      setMessage('Sesja wygasła. Zaloguj się ponownie.');
+    }
+  }, [router, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,14 +40,17 @@ function LoginForm() {
 
     try {
       const result = await signIn('credentials', {
-        email,
+        email: email.toLowerCase(),
         password,
         redirect: false,
       });
 
       if (result?.error) {
         setError('Nieprawidłowy email lub hasło');
-      } else {
+      } else if (result?.ok) {
+        // Sprawdź rolę użytkownika i przekieruj
+        const session = await getSession();
+        console.log('Login successful, user role:', session?.user?.role);
         router.push('/dashboard');
       }
     } catch (err) {
@@ -48,6 +72,12 @@ function LoginForm() {
             <p className="text-gray-600 mt-2">Zaloguj się do systemu</p>
           </div>
 
+          {message && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="text-green-600 text-sm">{message}</div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -59,7 +89,7 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field"
-                placeholder="twoj@email.com"
+                placeholder="twoj@grupaeltron.pl"
                 required
                 disabled={loading}
               />
@@ -96,13 +126,22 @@ function LoginForm() {
             </button>
           </form>
 
-          <div className="mt-8 text-center text-sm text-gray-500">
-            <p>Testowe konta:</p>
-            <p className="mt-2">
-              <strong>admin@eltron.pl</strong> / hasło: <strong>admin123</strong>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Nie masz konta?{' '}
+              <Link href="/register" className="text-eltron-primary hover:underline font-medium">
+                Zarejestruj się
+              </Link>
             </p>
-            <p>
-              <strong>sprzedaz1@eltron.pl</strong> / hasło: <strong>sprzedaz123</strong>
+          </div>
+
+          <div className="mt-8 text-center text-sm text-gray-500">
+            <p><strong>Konto administratora:</strong></p>
+            <p className="mt-2">
+              <strong>admin@eltron.pl</strong> / hasło: <strong>[ZMIEŃ_TO_HASŁO]</strong>
+            </p>
+            <p className="mt-4 text-xs">
+              💡 Zmień hasło administratora na trudniejsze w bazie danych
             </p>
           </div>
         </div>
