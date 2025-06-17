@@ -124,11 +124,25 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     }
   })();
 
-  // Podział pozycji na strony (maksymalnie 8 pozycji na stronę)
-  const ITEMS_PER_PAGE = 8;
+  // Podział pozycji na strony - pierwsza strona: 8 pozycji, kolejne: 14 pozycji
+  const ITEMS_FIRST_PAGE = 8;
+  const ITEMS_OTHER_PAGES = 14;
   const pages = [];
-  for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
-    pages.push(items.slice(i, i + ITEMS_PER_PAGE));
+  
+  let currentIndex = 0;
+  
+  // Pierwsza strona - maksymalnie 8 pozycji (mniej miejsca przez header)
+  if (items.length > 0) {
+    const firstPageItems = items.slice(0, ITEMS_FIRST_PAGE);
+    pages.push(firstPageItems);
+    currentIndex = ITEMS_FIRST_PAGE;
+  }
+  
+  // Kolejne strony - maksymalnie 14 pozycji każda
+  while (currentIndex < items.length) {
+    const pageItems = items.slice(currentIndex, currentIndex + ITEMS_OTHER_PAGES);
+    pages.push(pageItems);
+    currentIndex += ITEMS_OTHER_PAGES;
   }
 
   const generateItemsHTML = (pageItems: any[], startIndex: number) => {
@@ -160,10 +174,17 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     </tr>
   ` : '';
 
-  // Generuj strony
+  // Generuj strony z poprawnym liczeniem pozycji
   const pagesHTML = pages.map((pageItems, pageIndex) => {
     const isLastPage = pageIndex === pages.length - 1;
-    const startIndex = pageIndex * ITEMS_PER_PAGE;
+    
+    // Oblicz startowy indeks dla tej strony
+    let startIndex = 0;
+    if (pageIndex === 0) {
+      startIndex = 0;
+    } else {
+      startIndex = ITEMS_FIRST_PAGE + (pageIndex - 1) * ITEMS_OTHER_PAGES;
+    }
     
     return `
       <div class="page ${pageIndex > 0 ? 'page-break' : ''}">
@@ -301,11 +322,18 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             padding: 10px;
         }
         
-        /* Podział na strony */
+        /* Podział na strony - różne wysokości */
         .page {
-            min-height: 250mm;
             position: relative;
             padding-bottom: 30mm; /* Miejsce na stopkę */
+        }
+        
+        .page:first-child {
+            min-height: 250mm; /* Pierwsza strona - mniej miejsca przez header */
+        }
+        
+        .page:not(:first-child) {
+            min-height: 280mm; /* Kolejne strony - więcej miejsca */
         }
         
         .page-break {
