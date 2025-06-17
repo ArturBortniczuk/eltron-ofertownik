@@ -14,14 +14,16 @@ export async function GET(
 
     console.log('Fetching offer:', offerId);
 
-    // Pobierz dane oferty
+    // Pobierz dane oferty z pełnymi informacjami
     const offerResult = await db.query(`
       SELECT 
         o.*,
         c.nip as client_nip,
-        c.address as client_address
+        c.address as client_address,
+        u.name as created_by_name
       FROM offers o
       LEFT JOIN clients c ON o.client_id = c.id
+      LEFT JOIN users u ON o.user_id = u.id
       WHERE o.id = $1
     `, [offerId]);
 
@@ -33,13 +35,25 @@ export async function GET(
 
     const offer = offerResult.rows[0];
     
+    // Pobierz pozycje z pełnymi danymi liczbowymi
     const itemsResult = await db.query(`
-      SELECT * FROM offer_items
+      SELECT 
+        product_name,
+        quantity::numeric as quantity,
+        unit,
+        unit_price::numeric as unit_price,
+        vat_rate::numeric as vat_rate,
+        net_amount::numeric as net_amount,
+        vat_amount::numeric as vat_amount,
+        gross_amount::numeric as gross_amount,
+        position_order
+      FROM offer_items
       WHERE offer_id = $1
       ORDER BY position_order
     `, [offerId]);
 
     console.log('Items result:', itemsResult.rows.length);
+    console.log('Sample item:', itemsResult.rows[0]);
     
     const items = itemsResult.rows;
 
@@ -72,11 +86,20 @@ export async function GET(
 }
 
 function generateProfessionalOfferHTML(offer: any, items: any[]): string {
-  const formatCurrency = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) {
+  const formatCurrency = (amount: number | string) => {
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (typeof numAmount !== 'number' || isNaN(numAmount)) {
       return '0,00 zł';
     }
-    return `${amount.toFixed(2).replace('.', ',')} zł`;
+    return `${numAmount.toFixed(2).replace('.', ',')} zł`;
+  };
+
+  const formatNumber = (value: number | string) => {
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (typeof numValue !== 'number' || isNaN(numValue)) {
+      return '0';
+    }
+    return numValue.toString().replace('.', ',');
   };
 
   const formatDate = (dateString: string) => {
@@ -101,18 +124,27 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     }
   })();
 
-  const itemsHTML = items.map((item, index) => `
-    <tr>
-      <td class="center-align">${index + 1}</td>
-      <td class="product-name">${safeString(item.product_name)}</td>
-      <td class="center-align">${item.quantity || 0}</td>
-      <td class="center-align">${safeString(item.unit)}</td>
-      <td class="right-align">${formatCurrency(item.unit_price)}</td>
-      <td class="center-align">${item.vat_rate || 0}%</td>
-      <td class="right-align">${formatCurrency(item.net_amount)}</td>
-      <td class="right-align bold">${formatCurrency(item.gross_amount)}</td>
-    </tr>
-  `).join('');
+  // Podział pozycji na strony (maksymalnie 8 pozycji na stronę)
+  const ITEMS_PER_PAGE = 8;
+  const pages = [];
+  for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
+    pages.push(items.slice(i, i + ITEMS_PER_PAGE));
+  }
+
+  const generateItemsHTML = (pageItems: any[], startIndex: number) => {
+    return pageItems.map((item, index) => `
+      <tr>
+        <td class="center-align">${startIndex + index + 1}</td>
+        <td class="product-name">${safeString(item.product_name)}</td>
+        <td class="center-align">${formatNumber(item.quantity)}</td>
+        <td class="center-align">${safeString(item.unit)}</td>
+        <td class="right-align">${formatCurrency(item.unit_price)}</td>
+        <td class="center-align">${formatNumber(item.vat_rate)}%</td>
+        <td class="right-align">${formatCurrency(item.net_amount)}</td>
+        <td class="right-align bold">${formatCurrency(item.gross_amount)}</td>
+      </tr>
+    `).join('');
+  };
 
   const additionalCosts = parseFloat(offer.additional_costs) || 0;
   const additionalCostHTML = additionalCosts > 0 ? `
@@ -128,6 +160,114 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     </tr>
   ` : '';
 
+  // Generuj strony
+  const pagesHTML = pages.map((pageItems, pageIndex) => {
+    const isLastPage = pageIndex === pages.length - 1;
+    const startIndex = pageIndex * ITEMS_PER_PAGE;
+    
+    return `
+      <div class="page ${pageIndex > 0 ? 'page-break' : ''}">
+        ${pageIndex === 0 ? `
+          <!-- Header tylko na pierwszej stronie -->
+          <div class="header">
+            <div class="company-info">
+              <div class="company-logo">GRUPA ELTRON</div>
+              <div class="company-details">
+                <strong>ul. Przykładowa 123, 00-000 Warszawa</strong><br>
+                📞 Tel: +48 123 456 789 | 📧 Email: kontakt@eltron.pl<br>
+                🏢 NIP: 123-456-78-90 | 🌐 www.grupaeltron.pl
+              </div>
+            </div>
+            
+            <div class="offer-info">
+              <div class="offer-number">OFERTA NR ${offer.id}</div>
+              <strong>Data:</strong> ${formatDate(offer.created_at)}<br>
+              <strong>Ważna do:</strong> ${validUntil}<br>
+              <strong>Termin dostawy:</strong> ${offer.delivery_days || 14} dni
+            </div>
+          </div>
+
+          <h1>Oferta Handlowa</h1>
+
+          <div class="client-conditions-container">
+            <div class="client-info">
+              <h2>📋 Odbiorca:</h2>
+              <div class="client-name">${safeString(offer.client_name)}</div>
+              <div class="client-details">
+                ${offer.client_address ? offer.client_address.replace(/\n/g, '<br>') + '<br>' : ''}
+                ${offer.client_nip ? `🏢 NIP: ${offer.client_nip}<br>` : ''}
+                ${offer.client_email ? `📧 Email: ${offer.client_email}<br>` : ''}
+                ${offer.client_phone ? `📞 Telefon: ${offer.client_phone}` : ''}
+              </div>
+            </div>
+
+            <div class="conditions">
+              <h2>📋 Warunki oferty:</h2>
+              <ul>
+                <li><strong>Dostawa:</strong> ${offer.delivery_days || 14} dni rob.</li>
+                <li><strong>Płatność:</strong> 30 dni</li>
+                <li><strong>Ważność:</strong> ${offer.valid_days || 30} dni</li>
+                <li><strong>Ceny:</strong> z VAT</li>
+                <li><strong>Waluta:</strong> PLN</li>
+              </ul>
+            </div>
+          </div>
+        ` : ''}
+
+        ${pageIndex === 0 ? '<h2>📦 Pozycje oferty:</h2>' : `<h2>📦 Pozycje oferty (cd. ${pageIndex + 1}):</h2>`}
+        
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-lp">Lp.</th>
+                <th class="col-product">Opis towaru/usługi</th>
+                <th class="col-qty">Ilość</th>
+                <th class="col-unit">J.m.</th>
+                <th class="col-price">Cena netto</th>
+                <th class="col-vat">VAT</th>
+                <th class="col-net">Wartość netto</th>
+                <th class="col-gross">Wartość brutto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${generateItemsHTML(pageItems, startIndex)}
+              ${isLastPage ? additionalCostHTML : ''}
+            </tbody>
+          </table>
+        </div>
+
+        ${isLastPage ? `
+          <div class="summary">
+            <div class="summary-table">
+              <table>
+                <tr>
+                  <td>Wartość netto:</td>
+                  <td>${formatCurrency(offer.total_net)}</td>
+                </tr>
+                <tr>
+                  <td>Podatek VAT 23%:</td>
+                  <td>${formatCurrency(offer.total_vat)}</td>
+                </tr>
+                <tr class="summary-total">
+                  <td><strong>RAZEM DO ZAPŁATY:</strong></td>
+                  <td><strong>${formatCurrency(offer.total_gross)}</strong></td>
+                </tr>
+              </table>
+            </div>
+          </div>
+
+          ${offer.notes ? `
+          <div class="notes">
+            <h3>💬 Uwagi dodatkowe:</h3>
+            <div class="notes-content">${safeString(offer.notes).replace(/\n/g, '<br>')}</div>
+          </div>
+          ` : ''}
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
   return `<!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -137,15 +277,16 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     <style>
         @page {
             size: A4;
-            margin: 15mm 10mm 15mm 10mm;
+            margin: 15mm 10mm 20mm 10mm;
         }
         
         * {
             box-sizing: border-box;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         body {
-            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
             font-size: 11px;
             line-height: 1.4;
             color: #333;
@@ -158,6 +299,17 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             max-width: 100%;
             margin: 0 auto;
             padding: 10px;
+        }
+        
+        /* Podział na strony */
+        .page {
+            min-height: 250mm;
+            position: relative;
+            padding-bottom: 30mm; /* Miejsce na stopkę */
+        }
+        
+        .page-break {
+            page-break-before: always;
         }
         
         /* Header */
@@ -186,12 +338,14 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             font-size: 18px;
             letter-spacing: 1px;
             box-shadow: 0 2px 8px rgba(59, 74, 92, 0.2);
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .company-details {
             font-size: 10px;
             color: #666;
             line-height: 1.5;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .offer-info {
@@ -202,6 +356,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             padding: 15px;
             border-radius: 8px;
             border-left: 4px solid #3B4A5C;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .offer-number {
@@ -209,6 +364,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             font-weight: bold;
             color: #3B4A5C;
             margin-bottom: 5px;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         /* Titles */
@@ -222,6 +378,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             text-transform: uppercase;
             border-bottom: 2px solid #3B4A5C;
             padding-bottom: 10px;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         h2 {
@@ -231,6 +388,16 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
+        }
+        
+        h3 {
+            font-size: 13px;
+            margin: 0 0 10px 0;
+            color: #856404;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         /* Client and conditions layout */
@@ -246,6 +413,21 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             padding: 20px;
             border-radius: 8px;
             border-left: 5px solid #3B4A5C;
+        }
+        
+        .client-name {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #3B4A5C;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
+        }
+        
+        .client-details {
+            font-size: 11px;
+            line-height: 1.5;
+            color: #666;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .conditions {
@@ -265,6 +447,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
         .conditions li {
             margin: 5px 0;
             position: relative;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .conditions li:before {
@@ -288,6 +471,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             border-collapse: collapse;
             background: white;
             font-size: 10px;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         th {
@@ -300,12 +484,14 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             text-transform: uppercase;
             letter-spacing: 0.5px;
             border: 1px solid #2a3441;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         td {
             padding: 10px 6px;
             border: 1px solid #e0e0e0;
             vertical-align: middle;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .center-align {
@@ -314,7 +500,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
         
         .right-align {
             text-align: right;
-            font-family: 'Courier New', monospace;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, monospace !important;
         }
         
         .product-name {
@@ -323,6 +509,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             max-width: 200px;
             word-wrap: break-word;
             hyphens: auto;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .bold {
@@ -363,6 +550,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             padding: 12px 20px;
             border-bottom: 1px solid #e9ecef;
             font-size: 12px;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .summary-table td:first-child {
@@ -373,7 +561,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
         
         .summary-table td:last-child {
             text-align: right;
-            font-family: 'Courier New', monospace;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, monospace !important;
             font-weight: 600;
         }
         
@@ -386,6 +574,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
         
         .summary-total td {
             border-bottom: none !important;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         /* Notes */
@@ -398,23 +587,16 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             border-left: 5px solid #ff9500;
         }
         
-        .notes h3 {
-            margin: 0 0 10px 0;
-            color: #856404;
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
         .notes-content {
             color: #856404;
             line-height: 1.6;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         /* Footer */
         .footer {
             position: fixed;
-            bottom: 15mm;
+            bottom: 10mm;
             left: 10mm;
             right: 10mm;
             text-align: center;
@@ -423,6 +605,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             border-top: 2px solid #e9ecef;
             padding-top: 10px;
             background: white;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .footer-highlight {
@@ -433,10 +616,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             margin-bottom: 8px;
             font-weight: 600;
             font-size: 11px;
-        }
-        
-        .page-content {
-            margin-bottom: 80px; /* Space for fixed footer */
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         /* Print button */
@@ -455,11 +635,91 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             z-index: 1000;
             box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
             transition: all 0.3s ease;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
         }
         
         .print-button:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+        }
+        
+        /* Column widths for better layout */
+        .col-lp { width: 6%; }
+        .col-product { width: 32%; }
+        .col-qty { width: 8%; }
+        .col-unit { width: 8%; }
+        .col-price { width: 11%; }
+        .col-vat { width: 7%; }
+        .col-net { width: 14%; }
+        .col-gross { width: 14%; }
+        
+        /* Print styles */
+        @media print {
+            body {
+                padding: 0;
+                background: white !important;
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+                font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
+            }
+            
+            .print-button {
+                display: none !important;
+            }
+            
+            .container {
+                padding: 0;
+            }
+            
+            .page {
+                min-height: auto;
+                padding-bottom: 20mm;
+            }
+            
+            .header {
+                display: flex;
+                page-break-inside: avoid;
+            }
+            
+            .client-conditions-container {
+                page-break-inside: avoid;
+            }
+            
+            .table-container {
+                page-break-inside: avoid;
+            }
+            
+            tbody tr {
+                page-break-inside: avoid;
+            }
+            
+            .summary, .notes {
+                page-break-inside: avoid;
+            }
+            
+            .footer {
+                position: fixed;
+                bottom: 0;
+                background: white !important;
+            }
+            
+            /* Ensure gradients and colors print */
+            .company-logo,
+            th,
+            .summary-total {
+                background: #3B4A5C !important;
+                color: white !important;
+            }
+            
+            .footer-highlight {
+                background: #3B4A5C !important;
+                color: white !important;
+            }
+            
+            /* Force consistent fonts in print */
+            * {
+                font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
+            }
         }
         
         /* Responsive design */
@@ -502,179 +762,14 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             .product-name {
                 max-width: 150px;
             }
-            
-            .footer {
-                position: static;
-                margin-top: 30px;
-            }
         }
-        
-        /* Print styles */
-        @media print {
-            body {
-                padding: 0;
-                background: white !important;
-                -webkit-print-color-adjust: exact;
-                color-adjust: exact;
-            }
-            
-            .print-button {
-                display: none !important;
-            }
-            
-            .container {
-                padding: 0;
-            }
-            
-            .header {
-                display: flex;
-                page-break-inside: avoid;
-            }
-            
-            .client-conditions-container {
-                page-break-inside: avoid;
-            }
-            
-            .table-container {
-                page-break-inside: avoid;
-            }
-            
-            tbody tr {
-                page-break-inside: avoid;
-            }
-            
-            .summary, .notes {
-                page-break-inside: avoid;
-            }
-            
-            .footer {
-                position: fixed;
-                bottom: 0;
-                background: white !important;
-            }
-            
-            /* Ensure gradients and colors print */
-            .company-logo,
-            th,
-            .summary-total {
-                background: #3B4A5C !important;
-                color: white !important;
-            }
-            
-            .footer-highlight {
-                background: #3B4A5C !important;
-                color: white !important;
-            }
-        }
-        
-        /* Column widths for better layout */
-        .col-lp { width: 6%; }
-        .col-product { width: 32%; }
-        .col-qty { width: 8%; }
-        .col-unit { width: 8%; }
-        .col-price { width: 11%; }
-        .col-vat { width: 7%; }
-        .col-net { width: 14%; }
-        .col-gross { width: 14%; }
     </style>
 </head>
 <body>
     <div class="container">
         <button class="print-button" onclick="window.print()">🖨️ Drukuj / Zapisz PDF</button>
         
-        <div class="page-content">
-            <div class="header">
-                <div class="company-info">
-                    <div class="company-logo">GRUPA ELTRON</div>
-                    <div class="company-details">
-                        <strong>ul. Przykładowa 123, 00-000 Warszawa</strong><br>
-                        📞 Tel: +48 123 456 789 | 📧 Email: kontakt@eltron.pl<br>
-                        🏢 NIP: 123-456-78-90 | 🌐 www.grupaeltron.pl
-                    </div>
-                </div>
-                
-                <div class="offer-info">
-                    <div class="offer-number">OFERTA NR ${offer.id}</div>
-                    <strong>Data:</strong> ${formatDate(offer.created_at)}<br>
-                    <strong>Ważna do:</strong> ${validUntil}<br>
-                    <strong>Termin dostawy:</strong> ${offer.delivery_days || 14} dni
-                </div>
-            </div>
-
-            <h1>Oferta Handlowa</h1>
-
-            <div class="client-conditions-container">
-                <div class="client-info">
-                    <h2>📋 Odbiorca:</h2>
-                    <div class="client-name">${safeString(offer.client_name)}</div>
-                    <div class="client-details">
-                        ${offer.client_address ? offer.client_address.replace(/\n/g, '<br>') + '<br>' : ''}
-                        ${offer.client_nip ? `🏢 NIP: ${offer.client_nip}<br>` : ''}
-                        ${offer.client_email ? `📧 Email: ${offer.client_email}<br>` : ''}
-                        ${offer.client_phone ? `📞 Telefon: ${offer.client_phone}` : ''}
-                    </div>
-                </div>
-
-                <div class="conditions">
-                    <h2>📋 Warunki oferty:</h2>
-                    <ul>
-                        <li><strong>Dostawa:</strong> ${offer.delivery_days || 14} dni rob.</li>
-                        <li><strong>Płatność:</strong> 30 dni</li>
-                        <li><strong>Ważność:</strong> ${offer.valid_days || 30} dni</li>
-                        <li><strong>Ceny:</strong> z VAT</li>
-                        <li><strong>Waluta:</strong> PLN</li>
-                    </ul>
-                </div>
-            </div>
-
-            <h2>📦 Pozycje oferty:</h2>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="col-lp">Lp.</th>
-                            <th class="col-product">Opis towaru/usługi</th>
-                            <th class="col-qty">Ilość</th>
-                            <th class="col-unit">J.m.</th>
-                            <th class="col-price">Cena netto</th>
-                            <th class="col-vat">VAT</th>
-                            <th class="col-net">Wartość netto</th>
-                            <th class="col-gross">Wartość brutto</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsHTML}
-                        ${additionalCostHTML}
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="summary">
-                <div class="summary-table">
-                    <table>
-                        <tr>
-                            <td>Wartość netto:</td>
-                            <td>${formatCurrency(offer.total_net)}</td>
-                        </tr>
-                        <tr>
-                            <td>Podatek VAT 23%:</td>
-                            <td>${formatCurrency(offer.total_vat)}</td>
-                        </tr>
-                        <tr class="summary-total">
-                            <td><strong>RAZEM DO ZAPŁATY:</strong></td>
-                            <td><strong>${formatCurrency(offer.total_gross)}</strong></td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-
-            ${offer.notes ? `
-            <div class="notes">
-                <h3>💬 Uwagi dodatkowe:</h3>
-                <div class="notes-content">${safeString(offer.notes).replace(/\n/g, '<br>')}</div>
-            </div>
-            ` : ''}
-        </div>
+        ${pagesHTML}
 
         <div class="footer">
             <div class="footer-highlight">
@@ -697,6 +792,24 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
                     cell.style.fontSize = '8px';
                 }
             });
+            
+            // Debug: pokaż informacje o cenach w konsoli
+            console.log('Offer data:', {
+                total_net: '${offer.total_net}',
+                total_vat: '${offer.total_vat}',
+                total_gross: '${offer.total_gross}',
+                items_count: ${items.length}
+            });
+            
+            ${items.length > 0 ? `
+            console.log('Sample item:', {
+                product_name: '${safeString(items[0]?.product_name)}',
+                unit_price: '${items[0]?.unit_price}',
+                quantity: '${items[0]?.quantity}',
+                net_amount: '${items[0]?.net_amount}',
+                gross_amount: '${items[0]?.gross_amount}'
+            });
+            ` : ''}
         });
     </script>
 </body>
