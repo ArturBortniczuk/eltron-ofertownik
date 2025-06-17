@@ -1,4 +1,3 @@
-// app/api/offers/[id]/pdf-html/route.ts - ULEPSZONA WERSJA
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../../lib/db';
 
@@ -234,34 +233,27 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             letter-spacing: 0.5px;
         }
         
-        /* Client info */
+        /* Client and conditions layout */
+        .client-conditions-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
         .client-info {
+            flex: 1;
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             padding: 20px;
             border-radius: 8px;
-            margin-bottom: 20px;
             border-left: 5px solid #3B4A5C;
         }
         
-        .client-name {
-            font-size: 16px;
-            font-weight: bold;
-            color: #3B4A5C;
-            margin-bottom: 8px;
-        }
-        
-        .client-details {
-            font-size: 11px;
-            line-height: 1.6;
-        }
-        
-        /* Conditions */
         .conditions {
+            flex: 1;
             background: #fff9f0;
             border: 1px solid #ffd700;
             border-radius: 8px;
-            padding: 15px;
-            margin: 20px 0;
+            padding: 20px;
         }
         
         .conditions ul {
@@ -421,21 +413,30 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
         
         /* Footer */
         .footer {
-            margin-top: 40px;
+            position: fixed;
+            bottom: 15mm;
+            left: 10mm;
+            right: 10mm;
             text-align: center;
             font-size: 10px;
             color: #6c757d;
             border-top: 2px solid #e9ecef;
-            padding-top: 20px;
+            padding-top: 10px;
+            background: white;
         }
         
         .footer-highlight {
             background: linear-gradient(135deg, #3B4A5C 0%, #4A5D72 100%);
             color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
             font-weight: 600;
+            font-size: 11px;
+        }
+        
+        .page-content {
+            margin-bottom: 80px; /* Space for fixed footer */
         }
         
         /* Print button */
@@ -476,6 +477,11 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
                 text-align: left;
             }
             
+            .client-conditions-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
             .summary {
                 justify-content: center;
             }
@@ -495,6 +501,11 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             
             .product-name {
                 max-width: 150px;
+            }
+            
+            .footer {
+                position: static;
+                margin-top: 30px;
             }
         }
         
@@ -520,6 +531,10 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
                 page-break-inside: avoid;
             }
             
+            .client-conditions-container {
+                page-break-inside: avoid;
+            }
+            
             .table-container {
                 page-break-inside: avoid;
             }
@@ -528,14 +543,25 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
                 page-break-inside: avoid;
             }
             
-            .summary, .notes, .footer {
+            .summary, .notes {
                 page-break-inside: avoid;
+            }
+            
+            .footer {
+                position: fixed;
+                bottom: 0;
+                background: white !important;
             }
             
             /* Ensure gradients and colors print */
             .company-logo,
             th,
             .summary-total {
+                background: #3B4A5C !important;
+                color: white !important;
+            }
+            
+            .footer-highlight {
                 background: #3B4A5C !important;
                 color: white !important;
             }
@@ -556,101 +582,105 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     <div class="container">
         <button class="print-button" onclick="window.print()">🖨️ Drukuj / Zapisz PDF</button>
         
-        <div class="header">
-            <div class="company-info">
-                <div class="company-logo">GRUPA ELTRON</div>
-                <div class="company-details">
-                    <strong>ul. Przykładowa 123, 00-000 Warszawa</strong><br>
-                    📞 Tel: +48 123 456 789 | 📧 Email: kontakt@eltron.pl<br>
-                    🏢 NIP: 123-456-78-90 | 🌐 www.grupaeltron.pl
+        <div class="page-content">
+            <div class="header">
+                <div class="company-info">
+                    <div class="company-logo">GRUPA ELTRON</div>
+                    <div class="company-details">
+                        <strong>ul. Przykładowa 123, 00-000 Warszawa</strong><br>
+                        📞 Tel: +48 123 456 789 | 📧 Email: kontakt@eltron.pl<br>
+                        🏢 NIP: 123-456-78-90 | 🌐 www.grupaeltron.pl
+                    </div>
+                </div>
+                
+                <div class="offer-info">
+                    <div class="offer-number">OFERTA NR ${offer.id}</div>
+                    <strong>Data:</strong> ${formatDate(offer.created_at)}<br>
+                    <strong>Ważna do:</strong> ${validUntil}<br>
+                    <strong>Termin dostawy:</strong> ${offer.delivery_days || 14} dni
                 </div>
             </div>
-            
-            <div class="offer-info">
-                <div class="offer-number">OFERTA NR ${offer.id}</div>
-                <strong>Data:</strong> ${formatDate(offer.created_at)}<br>
-                <strong>Ważna do:</strong> ${validUntil}<br>
-                <strong>Termin dostawy:</strong> ${offer.delivery_days || 14} dni
+
+            <h1>Oferta Handlowa</h1>
+
+            <div class="client-conditions-container">
+                <div class="client-info">
+                    <h2>📋 Odbiorca:</h2>
+                    <div class="client-name">${safeString(offer.client_name)}</div>
+                    <div class="client-details">
+                        ${offer.client_address ? offer.client_address.replace(/\n/g, '<br>') + '<br>' : ''}
+                        ${offer.client_nip ? `🏢 NIP: ${offer.client_nip}<br>` : ''}
+                        ${offer.client_email ? `📧 Email: ${offer.client_email}<br>` : ''}
+                        ${offer.client_phone ? `📞 Telefon: ${offer.client_phone}` : ''}
+                    </div>
+                </div>
+
+                <div class="conditions">
+                    <h2>📋 Warunki oferty:</h2>
+                    <ul>
+                        <li><strong>Dostawa:</strong> ${offer.delivery_days || 14} dni rob.</li>
+                        <li><strong>Płatność:</strong> 30 dni</li>
+                        <li><strong>Ważność:</strong> ${offer.valid_days || 30} dni</li>
+                        <li><strong>Ceny:</strong> z VAT</li>
+                        <li><strong>Waluta:</strong> PLN</li>
+                    </ul>
+                </div>
             </div>
-        </div>
 
-        <h1>Oferta Handlowa</h1>
-
-        <div class="client-info">
-            <h2>📋 Odbiorca:</h2>
-            <div class="client-name">${safeString(offer.client_name)}</div>
-            <div class="client-details">
-                ${offer.client_address ? offer.client_address.replace(/\n/g, '<br>') + '<br>' : ''}
-                ${offer.client_nip ? `🏢 NIP: ${offer.client_nip}<br>` : ''}
-                ${offer.client_email ? `📧 Email: ${offer.client_email}<br>` : ''}
-                ${offer.client_phone ? `📞 Telefon: ${offer.client_phone}` : ''}
-            </div>
-        </div>
-
-        <div class="conditions">
-            <h2>📋 Warunki oferty:</h2>
-            <ul>
-                <li><strong>Termin dostawy:</strong> ${offer.delivery_days || 14} dni roboczych od potwierdzenia zamówienia</li>
-                <li><strong>Termin płatności:</strong> 30 dni od daty wystawienia faktury</li>
-                <li><strong>Ważność oferty:</strong> ${offer.valid_days || 30} dni od daty wystawienia</li>
-                <li><strong>Ceny:</strong> zawierają podatek VAT</li>
-                <li><strong>Waluta:</strong> PLN (złoty polski)</li>
-            </ul>
-        </div>
-
-        <h2>📦 Pozycje oferty:</h2>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th class="col-lp">Lp.</th>
-                        <th class="col-product">Opis towaru/usługi</th>
-                        <th class="col-qty">Ilość</th>
-                        <th class="col-unit">J.m.</th>
-                        <th class="col-price">Cena netto</th>
-                        <th class="col-vat">VAT</th>
-                        <th class="col-net">Wartość netto</th>
-                        <th class="col-gross">Wartość brutto</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itemsHTML}
-                    ${additionalCostHTML}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="summary">
-            <div class="summary-table">
+            <h2>📦 Pozycje oferty:</h2>
+            <div class="table-container">
                 <table>
-                    <tr>
-                        <td>Wartość netto:</td>
-                        <td>${formatCurrency(offer.total_net)}</td>
-                    </tr>
-                    <tr>
-                        <td>Podatek VAT 23%:</td>
-                        <td>${formatCurrency(offer.total_vat)}</td>
-                    </tr>
-                    <tr class="summary-total">
-                        <td><strong>RAZEM DO ZAPŁATY:</strong></td>
-                        <td><strong>${formatCurrency(offer.total_gross)}</strong></td>
-                    </tr>
+                    <thead>
+                        <tr>
+                            <th class="col-lp">Lp.</th>
+                            <th class="col-product">Opis towaru/usługi</th>
+                            <th class="col-qty">Ilość</th>
+                            <th class="col-unit">J.m.</th>
+                            <th class="col-price">Cena netto</th>
+                            <th class="col-vat">VAT</th>
+                            <th class="col-net">Wartość netto</th>
+                            <th class="col-gross">Wartość brutto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHTML}
+                        ${additionalCostHTML}
+                    </tbody>
                 </table>
             </div>
-        </div>
 
-        ${offer.notes ? `
-        <div class="notes">
-            <h3>💬 Uwagi dodatkowe:</h3>
-            <div class="notes-content">${safeString(offer.notes).replace(/\n/g, '<br>')}</div>
+            <div class="summary">
+                <div class="summary-table">
+                    <table>
+                        <tr>
+                            <td>Wartość netto:</td>
+                            <td>${formatCurrency(offer.total_net)}</td>
+                        </tr>
+                        <tr>
+                            <td>Podatek VAT 23%:</td>
+                            <td>${formatCurrency(offer.total_vat)}</td>
+                        </tr>
+                        <tr class="summary-total">
+                            <td><strong>RAZEM DO ZAPŁATY:</strong></td>
+                            <td><strong>${formatCurrency(offer.total_gross)}</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            ${offer.notes ? `
+            <div class="notes">
+                <h3>💬 Uwagi dodatkowe:</h3>
+                <div class="notes-content">${safeString(offer.notes).replace(/\n/g, '<br>')}</div>
+            </div>
+            ` : ''}
         </div>
-        ` : ''}
 
         <div class="footer">
             <div class="footer-highlight">
-                <strong>🙏 Dziękujemy za zainteresowanie naszą ofertą!</strong>
+                🙏 Dziękujemy za zainteresowanie naszą ofertą!
             </div>
-            <p>W przypadku pytań prosimy o kontakt telefoniczny lub mailowy.</p>
+            <p>W przypadku pytań prosimy o kontakt: +48 123 456 789 | kontakt@eltron.pl</p>
             <p><strong>Grupa Eltron</strong> - Twój partner w branży elektrycznej</p>
         </div>
     </div>
