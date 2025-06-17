@@ -1,3 +1,4 @@
+// app/dashboard/layout.tsx - ZAKTUALIZOWANA WERSJA Z ROLAMI
 'use client';
 
 import { useSession, signOut } from 'next-auth/react';
@@ -12,7 +13,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login');
+      router.push('/login?message=session_expired');
     }
   }, [status, router]);
 
@@ -31,6 +32,36 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+
+  const userRole = (session.user as any)?.role || 'inne';
+  const userMarketRegion = (session.user as any)?.marketRegion;
+  const firstName = (session.user as any)?.firstName || session.user?.name?.split(' ')[0] || 'Użytkownik';
+
+  const getRoleDisplayName = (role: string) => {
+    const roleMap: Record<string, string> = {
+      'handlowiec': 'Handlowiec',
+      'zarząd': 'Zarząd',
+      'centrum elektryczne': 'Centrum Elektryczne',
+      'budowy': 'Budowy',
+      'inne': 'Inne'
+    };
+    return roleMap[role] || role;
+  };
+
+  const getRoleBadgeColor = (role: string) => {
+    const colorMap: Record<string, string> = {
+      'handlowiec': 'bg-blue-100 text-blue-800',
+      'zarząd': 'bg-purple-100 text-purple-800',
+      'centrum elektryczne': 'bg-green-100 text-green-800',
+      'budowy': 'bg-orange-100 text-orange-800',
+      'inne': 'bg-gray-100 text-gray-800'
+    };
+    return colorMap[role] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Określ dostępne funkcje na podstawie roli
+  const canViewAllOffers = ['zarząd', 'centrum elektryczne'].includes(userRole);
+  const canManageUsers = userRole === 'zarząd';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -64,8 +95,19 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                 href="/dashboard/offers" 
                 className="text-gray-600 hover:text-eltron-primary transition-colors"
               >
-                Moje oferty
+                {canViewAllOffers ? 'Wszystkie oferty' : 'Moje oferty'}
               </Link>
+              
+              {/* Dodatkowe opcje dla zarządu */}
+              {canManageUsers && (
+                <Link 
+                  href="/dashboard/admin" 
+                  className="text-gray-600 hover:text-eltron-primary transition-colors"
+                >
+                  Administracja
+                </Link>
+              )}
+              
               <Link 
                 href="/dashboard/offers/new" 
                 className="btn-primary"
@@ -75,10 +117,22 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </nav>
 
             <div className="flex items-center space-x-4">
-              <div className="text-sm">
-                <span className="text-gray-600">Zalogowany jako:</span>
-                <br />
-                <span className="font-medium">{session.user?.name || 'Użytkownik'}</span>
+              <div className="text-right">
+                <div className="flex items-center space-x-2">
+                  <div className="text-sm">
+                    <span className="font-medium">{firstName}</span>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(userRole)}`}>
+                        {getRoleDisplayName(userRole)}
+                      </span>
+                      {userMarketRegion && (
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700">
+                          {userMarketRegion}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
@@ -112,6 +166,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           >
             Oferty
           </Link>
+          {canManageUsers && (
+            <Link 
+              href="/dashboard/admin" 
+              className="text-gray-600 hover:text-eltron-primary text-sm transition-colors whitespace-nowrap"
+            >
+              Admin
+            </Link>
+          )}
           <Link 
             href="/dashboard/offers/new" 
             className="text-eltron-primary font-medium text-sm whitespace-nowrap"
@@ -120,6 +182,19 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
       </nav>
+
+      {/* Role info banner - tylko dla development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-yellow-800 text-sm">
+              🔧 Dev: Zalogowany jako <strong>{userRole}</strong>
+              {userMarketRegion && <span> - region <strong>{userMarketRegion}</strong></span>}
+              {canViewAllOffers && <span> - dostęp do wszystkich danych</span>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
