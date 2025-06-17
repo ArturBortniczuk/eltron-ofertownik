@@ -31,5 +31,11 @@
   },
   "engines": {
     "node": ">=18.17.0"
+  },
+  "resolutions": {
+    "pg-cloudflare": false
+  },
+  "overrides": {
+    "pg-cloudflare": false
   }
 }
