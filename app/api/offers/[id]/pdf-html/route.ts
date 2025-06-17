@@ -702,6 +702,11 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             .page {
                 min-height: auto;
                 padding-bottom: 20mm;
+                page-break-after: always;
+            }
+            
+            .page:last-child {
+                page-break-after: avoid;
             }
             
             .header {
