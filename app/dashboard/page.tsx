@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx - ROZSZERZONA WERSJA Z MARŻAMI
+// app/dashboard/page.tsx - POPRAWKA
 'use client';
 
 import { useSession } from 'next-auth/react';
@@ -24,7 +24,6 @@ interface DashboardStats {
     margin_percent?: number;
     total_margin?: number;
   }>;
-  // Nowe statystyki marż
   avgMargin?: number;
   totalProfit?: number;
   lowMarginOffers?: number;
@@ -36,9 +35,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showMarginAnalysis, setShowMarginAnalysis] = useState(false);
 
-  // Sprawdź uprawnienia
   const canViewAllData = canAccessAllData(session);
-  const userRole = (session?.user as any)?.role;
 
   useEffect(() => {
     fetchStats();
@@ -72,6 +69,7 @@ export default function DashboardPage() {
   }
 
   const formatCurrency = (amount: number) => {
+    if (typeof amount !== 'number' || isNaN(amount)) return '0,00 zł';
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
       currency: 'PLN'
@@ -79,7 +77,11 @@ export default function DashboardPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pl-PL');
+    try {
+      return new Date(dateString).toLocaleDateString('pl-PL');
+    } catch {
+      return 'Nieprawidłowa data';
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -99,11 +101,17 @@ export default function DashboardPage() {
     );
   };
 
-  const getMarginBadge = (margin: number) => {
+  const getMarginBadge = (margin: number | undefined) => {
+    if (typeof margin !== 'number' || isNaN(margin)) return 'bg-gray-100 text-gray-800';
     if (margin >= 20) return 'bg-green-100 text-green-800';
     if (margin >= 15) return 'bg-yellow-100 text-yellow-800';
     if (margin >= 10) return 'bg-orange-100 text-orange-800';
     return 'bg-red-100 text-red-800';
+  };
+
+  const formatMargin = (margin: number | undefined) => {
+    if (typeof margin !== 'number' || isNaN(margin)) return 'N/A';
+    return `${margin.toFixed(1)}%`;
   };
 
   return (
@@ -192,7 +200,7 @@ export default function DashboardPage() {
               </div>
               <div className="ml-4">
                 <p className="text-2xl font-bold text-gray-900">
-                  {stats.avgMargin ? `${stats.avgMargin.toFixed(1)}%` : 'N/A'}
+                  {formatMargin(stats.avgMargin)}
                 </p>
                 <p className="text-gray-600 text-sm">Średnia marża</p>
               </div>
@@ -320,7 +328,6 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Dodatkowe akcje dla zarządu */}
         {canViewAllData && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200">
             <Link 
@@ -412,7 +419,7 @@ export default function DashboardPage() {
                     </td>
                     {canViewAllData && (
                       <td className="py-3 px-4">
-                        <div className="text-sm text-gray-600">{offer.salesperson_name}</div>
+                        <div className="text-sm text-gray-600">{offer.salesperson_name || '-'}</div>
                       </td>
                     )}
                     <td className="py-3 px-4">
@@ -425,7 +432,7 @@ export default function DashboardPage() {
                         <td className="py-3 px-4">
                           {offer.margin_percent !== undefined ? (
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${getMarginBadge(offer.margin_percent)}`}>
-                              {offer.margin_percent.toFixed(1)}%
+                              {formatMargin(offer.margin_percent)}
                             </span>
                           ) : (
                             <span className="text-gray-400 text-sm">-</span>
