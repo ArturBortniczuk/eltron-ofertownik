@@ -1,15 +1,15 @@
-// app/api/offers/route.ts - ROZSZERZONA WERSJA Z MARŻAMI
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 import { db } from '../../../lib/db';
+import { validateCreateOffer } from '../../../lib/validation';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -17,9 +17,17 @@ export async function POST(request: NextRequest) {
     const userId = parseInt(session.user.id);
     const data = await request.json();
 
+    const validation = validateCreateOffer(data);
+    if (!validation.isValid) {
+      return NextResponse.json({
+        error: 'Błąd walidacji',
+        details: validation.errors
+      }, { status: 400 });
+    }
+
     // Rozpocznij transakcję
     const client = await db.connect();
-    
+
     try {
       await client.query('BEGIN');
 
@@ -61,7 +69,7 @@ export async function POST(request: NextRequest) {
       // Dodaj pozycje oferty z danymi marży
       for (let i = 0; i < data.items.length; i++) {
         const item = data.items[i];
-        
+
         // Sprawdź czy produkt już istnieje w bazie
         let productId = null;
         const existingProduct = await client.query(
@@ -71,7 +79,7 @@ export async function POST(request: NextRequest) {
 
         if (existingProduct.rows.length > 0) {
           productId = existingProduct.rows[0].id;
-          
+
           // Zaktualizuj last_used
           await client.query(
             'UPDATE products SET last_used = CURRENT_TIMESTAMP WHERE id = $1',
@@ -92,7 +100,7 @@ export async function POST(request: NextRequest) {
             product_id, price, cost_price, sale_price, margin_percent, used_by
           ) VALUES ($1, $2, $3, $4, $5, $6)
         `, [
-          productId, 
+          productId,
           item.unit_price,
           item.cost_price || 0,
           item.unit_price,
@@ -150,10 +158,10 @@ export async function POST(request: NextRequest) {
 
       await client.query('COMMIT');
 
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         offerId,
-        message: 'Oferta została zapisana pomyślnie' 
+        message: 'Oferta została zapisana pomyślnie'
       });
 
     } catch (error) {
@@ -175,7 +183,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

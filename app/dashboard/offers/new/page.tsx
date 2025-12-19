@@ -50,23 +50,23 @@ export default function NewOfferPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams?.get('client');
-  
+
   // Wybór klienta
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showClientSelector, setShowClientSelector] = useState(true);
   const [clientSearch, setClientSearch] = useState('');
-  
+
   // Dane oferty
   const [deliveryDays, setDeliveryDays] = useState(14);
   const [validDays, setValidDays] = useState(30);
   const [additionalCosts, setAdditionalCosts] = useState(0);
   const [additionalCostsDescription, setAdditionalCostsDescription] = useState('');
   const [notes, setNotes] = useState('');
-  
+
   // Pozycje w ofercie
   const [items, setItems] = useState<OfferItem[]>([]);
-  
+
   // Aktualnie dodawana pozycja
   const [currentItem, setCurrentItem] = useState<OfferItem>({
     product_name: '',
@@ -82,13 +82,14 @@ export default function NewOfferPage() {
     discount_percent: 0,
     original_price: 0
   });
-  
+
   // Podpowiedzi produktów
   const [productSuggestions, setProductSuggestions] = useState<ProductSuggestion[]>([]);
-  
+
   // Stan UI
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [errorDetails, setErrorDetails] = useState<string[]>([]);
   const [showMarginWarning, setShowMarginWarning] = useState(false);
 
   useEffect(() => {
@@ -156,7 +157,7 @@ export default function NewOfferPage() {
 
   const handleProductNameChange = (value: string) => {
     setCurrentItem(prev => ({ ...prev, product_name: value }));
-    
+
     // Wyszukaj produkty jeśli jest co najmniej 2 znaki
     if (value.length >= 2) {
       searchProducts(value);
@@ -172,11 +173,11 @@ export default function NewOfferPage() {
       unit: product.unit,
       unit_price: product.last_price
     }));
-    calculateAmounts({ 
-      ...currentItem, 
-      product_name: product.name, 
-      unit: product.unit, 
-      unit_price: product.last_price 
+    calculateAmounts({
+      ...currentItem,
+      product_name: product.name,
+      unit: product.unit,
+      unit_price: product.last_price
     });
   };
 
@@ -196,10 +197,10 @@ export default function NewOfferPage() {
       discount_percent: priceData.discount_percent,
       original_price: priceData.original_price
     };
-    
+
     // Sprawdź czy marża nie jest za niska
     setShowMarginWarning(priceData.margin_percent < 10);
-    
+
     calculateAmounts(updatedItem);
   };
 
@@ -271,7 +272,7 @@ export default function NewOfferPage() {
   const calculateTotals = () => {
     const itemTotalNet = items.reduce((sum, item) => sum + item.net_amount, 0);
     const itemTotalCost = items.reduce((sum, item) => sum + (item.cost_price * item.quantity), 0);
-    
+
     const totalNet = itemTotalNet + additionalCosts;
     const totalVat = items.reduce((sum, item) => sum + item.vat_amount, 0) + (additionalCosts * 0.23);
     const totalGross = totalNet + totalVat;
@@ -301,7 +302,7 @@ export default function NewOfferPage() {
     }
 
     const totals = calculateTotals();
-    
+
     // Sprawdź średnią marżę przed zapisaniem
     if (totals.marginPercent < 10 && status === 'sent') {
       const confirmed = confirm(
@@ -313,6 +314,7 @@ export default function NewOfferPage() {
 
     setSaving(true);
     setError('');
+    setErrorDetails([]);
 
     try {
       const offerData = {
@@ -344,6 +346,9 @@ export default function NewOfferPage() {
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Błąd podczas zapisywania oferty');
+        if (errorData.details) {
+          setErrorDetails(errorData.details);
+        }
       }
     } catch (error) {
       setError('Błąd podczas zapisywania oferty');
@@ -375,7 +380,14 @@ export default function NewOfferPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-red-600 text-sm">{error}</div>
+          <div className="text-red-600 text-sm font-medium">{error}</div>
+          {errorDetails.length > 0 && (
+            <ul className="list-disc list-inside mt-2 text-sm text-red-600">
+              {errorDetails.map((err, index) => (
+                <li key={index}>{err}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -406,7 +418,7 @@ export default function NewOfferPage() {
                 {clientSearch ? 'Brak wyników wyszukiwania' : 'Brak klientów'}
               </h3>
               <p className="text-gray-600 mb-4">
-                {clientSearch 
+                {clientSearch
                   ? 'Spróbuj innych słów kluczowych lub dodaj nowego klienta.'
                   : 'Dodaj pierwszego klienta, aby móc tworzyć oferty.'}
               </p>
@@ -510,7 +522,7 @@ export default function NewOfferPage() {
             {/* Dodawanie pozycji */}
             <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Dodaj pozycję</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -610,7 +622,7 @@ export default function NewOfferPage() {
                     <div className="flex items-center">
                       <div className="text-yellow-600 mr-2">⚠️</div>
                       <div className="text-yellow-700">
-                        <strong>Uwaga:</strong> Marża jest bardzo niska ({currentItem.margin_percent.toFixed(1)}%). 
+                        <strong>Uwaga:</strong> Marża jest bardzo niska ({currentItem.margin_percent.toFixed(1)}%).
                         Sprawdź czy cena jest prawidłowa.
                       </div>
                     </div>
@@ -637,10 +649,9 @@ export default function NewOfferPage() {
                       {currentItem.cost_price > 0 && (
                         <div>
                           <span className="text-gray-600">Marża:</span>
-                          <span className={`font-medium ml-2 ${
-                            currentItem.margin_percent >= 15 ? 'text-green-600' : 
-                            currentItem.margin_percent >= 10 ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
+                          <span className={`font-medium ml-2 ${currentItem.margin_percent >= 15 ? 'text-green-600' :
+                              currentItem.margin_percent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
                             {currentItem.margin_percent.toFixed(1)}%
                           </span>
                         </div>
@@ -662,7 +673,7 @@ export default function NewOfferPage() {
                     Wyszukiwanie: "<span className="font-medium">{currentItem.product_name}</span>"
                   </div>
                 </div>
-                
+
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -730,16 +741,15 @@ export default function NewOfferPage() {
                       <div className="flex-1">
                         <div className="font-medium text-gray-900">{item.product_name}</div>
                         <div className="text-sm text-gray-600">
-                          {item.quantity} {item.unit} × {item.unit_price.toFixed(2)} zł 
+                          {item.quantity} {item.unit} × {item.unit_price.toFixed(2)} zł
                           = {item.gross_amount.toFixed(2)} zł brutto
                         </div>
                         {item.cost_price > 0 && (
                           <div className="text-xs text-gray-500 mt-1">
-                            Koszt: {item.cost_price.toFixed(2)} zł | 
-                            Marża: <span className={`font-medium ${
-                              item.margin_percent >= 15 ? 'text-green-600' : 
-                              item.margin_percent >= 10 ? 'text-yellow-600' : 'text-red-600'
-                            }`}>
+                            Koszt: {item.cost_price.toFixed(2)} zł |
+                            Marża: <span className={`font-medium ${item.margin_percent >= 15 ? 'text-green-600' :
+                                item.margin_percent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                              }`}>
                               {item.margin_percent.toFixed(1)}%
                             </span>
                             {item.discount_percent > 0 && (
@@ -809,23 +819,23 @@ export default function NewOfferPage() {
           <div className="lg:col-span-1">
             <div className="card sticky top-4">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Podsumowanie</h2>
-              
+
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Pozycje:</span>
                   <span className="font-medium">{items.length}</span>
                 </div>
-                
+
                 <div className="flex justify-between">
                   <span className="text-gray-600">Wartość netto:</span>
                   <span className="font-medium">{totals.net.toFixed(2)} zł</span>
                 </div>
-                
+
                 <div className="flex justify-between">
                   <span className="text-gray-600">VAT:</span>
                   <span className="font-medium">{totals.vat.toFixed(2)} zł</span>
                 </div>
-                
+
                 <div className="flex justify-between border-t border-gray-200 pt-3">
                   <span className="text-lg font-semibold">RAZEM:</span>
                   <span className="text-lg font-bold text-eltron-primary">
@@ -848,10 +858,9 @@ export default function NewOfferPage() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Średnia marża:</span>
-                      <span className={`font-bold ${
-                        totals.marginPercent >= 15 ? 'text-green-600' : 
-                        totals.marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
+                      <span className={`font-bold ${totals.marginPercent >= 15 ? 'text-green-600' :
+                          totals.marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
                         {totals.marginPercent.toFixed(1)}%
                       </span>
                     </div>
@@ -876,7 +885,7 @@ export default function NewOfferPage() {
                 >
                   {saving ? 'Zapisywanie...' : '💾 Zapisz jako szkic'}
                 </button>
-                
+
                 <button
                   onClick={() => saveOffer('sent')}
                   disabled={saving}

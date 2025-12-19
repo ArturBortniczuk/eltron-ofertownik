@@ -6,7 +6,23 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    role VARCHAR(50) DEFAULT 'user', -- 'user', 'handlowiec', 'zarząd', 'centrum elektryczne'
+    market_region VARCHAR(100),
+    is_active BOOLEAN DEFAULT true,
+    last_login TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabela prób rejestracji
+CREATE TABLE registration_attempts (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    ip_address VARCHAR(50),
+    success BOOLEAN DEFAULT false,
+    error_message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -40,8 +56,24 @@ CREATE TABLE product_prices (
     id SERIAL PRIMARY KEY,
     product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
     price DECIMAL(10,2) NOT NULL,
+    cost_price DECIMAL(10,2) DEFAULT 0,
+    sale_price DECIMAL(10,2), -- Może być redundancyjne do price, ale używane w kodzie
+    margin_percent DECIMAL(5,2) DEFAULT 0,
     used_by INTEGER REFERENCES users(id),
     used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Marże produktów (per użytkownik/region)
+CREATE TABLE product_margins (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id),
+    cost_price DECIMAL(10,2) NOT NULL,
+    margin_percent DECIMAL(5,2) DEFAULT 0,
+    min_margin_percent DECIMAL(5,2) DEFAULT 10,
+    max_discount_percent DECIMAL(5,2) DEFAULT 15,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(product_id, user_id)
 );
 
 -- Oferty
@@ -77,8 +109,26 @@ CREATE TABLE offer_items (
     net_amount DECIMAL(10,2) NOT NULL,
     vat_amount DECIMAL(10,2) NOT NULL,
     gross_amount DECIMAL(10,2) NOT NULL,
+    cost_price DECIMAL(10,2) DEFAULT 0,
+    margin_percent DECIMAL(5,2) DEFAULT 0,
+    discount_percent DECIMAL(5,2) DEFAULT 0,
+    original_price DECIMAL(10,2),
     position_order INTEGER DEFAULT 1
 );
+
+-- Widok podsumowania marży dla ofert
+CREATE OR REPLACE VIEW offer_margin_summary AS
+SELECT 
+    offer_id,
+    SUM(cost_price * quantity) as total_cost,
+    SUM(net_amount - (cost_price * quantity)) as total_margin,
+    CASE 
+        WHEN SUM(net_amount) > 0 THEN 
+            (SUM(net_amount - (cost_price * quantity)) / SUM(net_amount)) * 100
+        ELSE 0 
+    END as margin_percent
+FROM offer_items
+GROUP BY offer_id;
 
 -- Indeksy dla lepszej wydajności
 CREATE INDEX idx_products_name ON products USING gin(to_tsvector('polish', name));
@@ -88,6 +138,7 @@ CREATE INDEX idx_offers_client_id ON offers(client_id);
 CREATE INDEX idx_clients_created_by ON clients(created_by);
 CREATE INDEX idx_product_prices_product_id ON product_prices(product_id);
 CREATE INDEX idx_offer_items_offer_id ON offer_items(offer_id);
+CREATE INDEX idx_product_margins_product_user ON product_margins(product_id, user_id);
 
 -- Funkcja do automatycznego czyszczenia starych ofert (starszych niż 2 miesiące)
 CREATE OR REPLACE FUNCTION cleanup_old_offers()
@@ -100,50 +151,16 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Przykładowe dane testowe - NAJPIERW USUŃ ISTNIEJĄCE DANE
-DELETE FROM offer_items;
-DELETE FROM offers;
-DELETE FROM clients;
-DELETE FROM product_prices;
-DELETE FROM products;
-DELETE FROM users;
+-- DELETE FROM offer_items;
+-- DELETE FROM offers;
+-- DELETE FROM clients;
+-- DELETE FROM product_prices;
+-- DELETE FROM product_margins;
+-- DELETE FROM products;
+-- DELETE FROM users;
 
--- Użytkownicy z prostymi hasłami (DO ZMIANY W PRODUKCJI!)
-INSERT INTO users (email, password_hash, name) VALUES 
-('admin@eltron.pl', 'admin123', 'Administrator'),
-('sprzedaz1@eltron.pl', 'sprzedaz123', 'Jan Kowalski'),
-('sprzedaz2@eltron.pl', 'sprzedaz123', 'Anna Nowak');
+-- Użytkownicy
+INSERT INTO users (email, password_hash, name, role, is_active) VALUES 
+('admin@eltron.pl', '$2a$10$X...', 'Administrator', 'zarząd', true),
+('sprzedaz1@eltron.pl', '$2a$10$X...', 'Jan Kowalski', 'handlowiec', true);
 
--- Przykładowi klienci
-INSERT INTO clients (name, email, phone, address, nip, contact_person, created_by) VALUES 
-('ABC Elektro Sp. z o.o.', 'zamowienia@abc-elektro.pl', '+48 22 123 45 67', 'ul. Przemysłowa 15
-02-456 Warszawa', '1234567890', 'Marek Kowalczyk', 1),
-('Instalacje XYZ', 'biuro@instalacje-xyz.pl', '+48 61 987 65 43', 'ul. Elektryczna 8
-60-123 Poznań', '0987654321', 'Anna Wiśniewska', 1),
-('Technika Nowoczesna', 'info@technika-nowoczesna.pl', '+48 12 555 44 33', 'al. Techniczna 22
-30-789 Kraków', '1122334455', 'Piotr Nowak', 2);
-
--- Przykładowe produkty z załączonych obrazów
-INSERT INTO products (name, unit, created_by) VALUES 
-('WYŁĄCZNIK NADPRĄDOWY FB1-63 1P B 6A 6kA', 'szt', 1),
-('Przewód LgY 1,5 (H07V-K) żółto-zielony', 'm', 1),
-('Tulejka kablowa izolowana czarna (100 szt)', 'opak', 1),
-('RURA GIĘTKA KARBOWANA 18/13.5 CAŁA', 'm', 1),
-('RURA GIĘTKA KARBOWANA 22/18 Z POLIETYLENU', 'm', 1),
-('Przewód OMY 3x0,5 (H03VV-F)', 'm', 1),
-('Przewód LgY 1,5 (H07V-K) czarny', 'm', 1),
-('Łącznik jednobiegunowy', 'szt', 2),
-('Gniazdo z uziemieniem', 'szt', 2),
-('Oprawa LED 18W', 'szt', 2);
-
--- Przykładowe ceny
-INSERT INTO product_prices (product_id, price, used_by) VALUES 
-(1, 12.50, 1),
-(2, 2.30, 1),
-(3, 45.00, 1),
-(4, 3.20, 1),
-(5, 4.50, 1),
-(6, 5.80, 1),
-(7, 2.30, 1),
-(8, 8.90, 2),
-(9, 15.60, 2),
-(10, 45.00, 2);

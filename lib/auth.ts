@@ -14,13 +14,10 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          console.log('❌ Missing credentials');
           return null;
         }
 
         try {
-          console.log('🔍 Trying to authenticate:', credentials.email);
-          
           // Pobierz użytkownika z bazy
           const result = await db.query(`
             SELECT 
@@ -30,24 +27,14 @@ export const authOptions: NextAuthOptions = {
             WHERE LOWER(email) = LOWER($1)
           `, [credentials.email.trim()]);
 
-          console.log('📊 Query result rows:', result.rows.length);
-
           if (result.rows.length === 0) {
-            console.log('❌ User not found');
             return null;
           }
 
           const user = result.rows[0];
-          console.log('👤 Found user:', {
-            email: user.email,
-            role: user.role,
-            is_active: user.is_active,
-            password_hash_preview: user.password_hash?.substring(0, 10) + '...'
-          });
 
           // Sprawdź czy konto jest aktywne
           if (user.is_active === false) {
-            console.log('❌ User account is inactive');
             return null;
           }
 
@@ -56,40 +43,22 @@ export const authOptions: NextAuthOptions = {
           const inputPassword = credentials.password.trim();
           const storedHash = user.password_hash?.trim() || '';
 
-          console.log('🔐 Password check:', {
-            inputLength: inputPassword.length,
-            hashLength: storedHash.length,
-            hashStartsWith: storedHash.substring(0, 4)
-          });
-
           if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$')) {
             // Bcrypt hash
-            console.log('🔒 Using bcrypt comparison');
             try {
               isPasswordValid = await bcrypt.compare(inputPassword, storedHash);
-              console.log('🔒 Bcrypt result:', isPasswordValid);
             } catch (bcryptError) {
-              console.error('❌ Bcrypt error:', bcryptError);
+              console.error('Bcrypt error:', bcryptError);
               isPasswordValid = false;
             }
           } else {
             // Plain text comparison (backward compatibility)
-            console.log('📝 Using plain text comparison');
             isPasswordValid = inputPassword === storedHash;
-            console.log('📝 Plain text result:', isPasswordValid);
-            console.log('📝 Comparing:', { 
-              input: `"${inputPassword}"`, 
-              stored: `"${storedHash}"`,
-              equal: inputPassword === storedHash
-            });
           }
 
           if (!isPasswordValid) {
-            console.log('❌ Invalid password');
             return null;
           }
-
-          console.log('✅ Authentication successful!');
           
           // Opcjonalnie: zaktualizuj last_login
           try {
@@ -98,7 +67,7 @@ export const authOptions: NextAuthOptions = {
               [user.id]
             );
           } catch (updateError) {
-            console.warn('⚠️ Failed to update last_login:', updateError);
+            console.warn('Failed to update last_login:', updateError);
           }
 
           // Przygotuj dane użytkownika
@@ -113,11 +82,10 @@ export const authOptions: NextAuthOptions = {
             marketRegion: user.market_region || null,
           };
 
-          console.log('👤 Returning user data:', userData);
           return userData;
 
         } catch (error) {
-          console.error('💥 Auth error:', error);
+          console.error('Auth error:', error);
           return null;
         }
       }
