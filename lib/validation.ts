@@ -67,9 +67,7 @@ export function validateCreateOffer(data: any): ValidationResult {
         });
     }
 
-    if (typeof data.total_gross !== 'number') {
-        errors.push('Nieprawidłowa suma brutto');
-    }
+    // Sumy (netto/VAT/brutto) są zawsze przeliczane na serwerze - nie wymagamy ich od klienta
 
     return {
         isValid: errors.length === 0,

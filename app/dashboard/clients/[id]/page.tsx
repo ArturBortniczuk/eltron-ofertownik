@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import ClientActivity from '../../../components/ClientActivity';
 
 interface Client {
   id: number;
@@ -278,6 +279,9 @@ export default function ClientDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Aktywność i rabaty */}
+          <ClientActivity clientId={client.id} />
         </div>
 
         {/* Sidebar ze statystykami */}

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../../../lib/db';
+import { getApiUser } from '../../../../../lib/api-auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
@@ -12,7 +15,8 @@ export async function GET(
       return NextResponse.json({ error: 'Nieprawidłowy ID oferty' }, { status: 400 });
     }
 
-    console.log('Fetching offer:', offerId);
+    const token = new URL(request.url).searchParams.get('token');
+    const user = await getApiUser();
 
     // Pobierz dane oferty z pełnymi informacjami
     const offerResult = await db.query(`
@@ -27,14 +31,19 @@ export async function GET(
       WHERE o.id = $1
     `, [offerId]);
 
-    console.log('Offer result:', offerResult.rows.length);
-
     if (offerResult.rows.length === 0) {
       return NextResponse.json({ error: 'Oferta nie została znaleziona' }, { status: 404 });
     }
 
     const offer = offerResult.rows[0];
-    
+
+    // Dostęp: właściciel, osoby z dostępem do całości albo klient z tokenem z linku
+    const tokenOk = !!token && token === offer.public_token && offer.status !== 'draft';
+    const userOk = !!user && (user.canViewAll || user.id === offer.user_id);
+    if (!tokenOk && !userOk) {
+      return NextResponse.json({ error: 'Brak dostępu do tej oferty' }, { status: 403 });
+    }
+
     // Pobierz pozycje z pełnymi danymi liczbowymi
     const itemsResult = await db.query(`
       SELECT 
@@ -52,9 +61,6 @@ export async function GET(
       ORDER BY position_order
     `, [offerId]);
 
-    console.log('Items result:', itemsResult.rows.length);
-    console.log('Sample item:', itemsResult.rows[0]);
-    
     const items = itemsResult.rows;
 
     // Generuj HTML
@@ -110,8 +116,11 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     }
   };
 
+  // Escapowanie HTML - dane pochodzą od użytkowników
   const safeString = (value: any) => {
-    return value ? String(value) : '';
+    return value
+      ? String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      : '';
   };
 
   const validUntil = (() => {
@@ -215,10 +224,10 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
               <h2>📋 Odbiorca:</h2>
               <div class="client-name">${safeString(offer.client_name)}</div>
               <div class="client-details">
-                ${offer.client_address ? offer.client_address.replace(/\n/g, '<br>') + '<br>' : ''}
-                ${offer.client_nip ? `🏢 NIP: ${offer.client_nip}<br>` : ''}
-                ${offer.client_email ? `📧 Email: ${offer.client_email}<br>` : ''}
-                ${offer.client_phone ? `📞 Telefon: ${offer.client_phone}` : ''}
+                ${offer.client_address ? safeString(offer.client_address).replace(/\n/g, '<br>') + '<br>' : ''}
+                ${offer.client_nip ? `🏢 NIP: ${safeString(offer.client_nip)}<br>` : ''}
+                ${offer.client_email ? `📧 Email: ${safeString(offer.client_email)}<br>` : ''}
+                ${offer.client_phone ? `📞 Telefon: ${safeString(offer.client_phone)}` : ''}
               </div>
             </div>
 
@@ -825,24 +834,6 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
                     cell.style.fontSize = '8px';
                 }
             });
-            
-            // Debug: pokaż informacje o cenach w konsoli
-            console.log('Offer data:', {
-                total_net: '${offer.total_net}',
-                total_vat: '${offer.total_vat}',
-                total_gross: '${offer.total_gross}',
-                items_count: ${items.length}
-            });
-            
-            ${items.length > 0 ? `
-            console.log('Sample item:', {
-                product_name: '${safeString(items[0]?.product_name)}',
-                unit_price: '${items[0]?.unit_price}',
-                quantity: '${items[0]?.quantity}',
-                net_amount: '${items[0]?.net_amount}',
-                gross_amount: '${items[0]?.gross_amount}'
-            });
-            ` : ''}
         });
     </script>
 </body>

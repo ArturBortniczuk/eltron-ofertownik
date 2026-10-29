@@ -1,23 +1,26 @@
--- Schema bazy danych dla Neon PostgreSQL
--- Wykonaj te komendy w konsoli Neon
+-- Schemat bazy danych Ofertownika (PostgreSQL / Neon)
+-- Skrypt jest idempotentny: można go uruchamiać wielokrotnie, także na istniejącej bazie.
+-- Aplikacja uruchamia go sama (Logowanie -> "Przygotuj dane demo"), ale można go też wkleić w konsoli Neon.
+-- Po zmianie tego pliku uruchom: node scripts/gen-schema.js
 
--- Tabela użytkowników (handlowców)
-CREATE TABLE users (
+-- Użytkownicy (handlowcy, zarząd, ...)
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(255),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
-    role VARCHAR(50) DEFAULT 'user', -- 'user', 'handlowiec', 'zarząd', 'centrum elektryczne'
+    role VARCHAR(50) DEFAULT 'user', -- 'handlowiec', 'zarząd', 'centrum elektryczne', 'budowy', 'inne'
     market_region VARCHAR(100),
     is_active BOOLEAN DEFAULT true,
     last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_target NUMERIC(12,2) DEFAULT 0;
 
--- Tabela prób rejestracji
-CREATE TABLE registration_attempts (
+CREATE TABLE IF NOT EXISTS registration_attempts (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
     ip_address VARCHAR(50),
@@ -26,8 +29,8 @@ CREATE TABLE registration_attempts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabela klientów
-CREATE TABLE clients (
+-- Klienci
+CREATE TABLE IF NOT EXISTS clients (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
@@ -41,8 +44,8 @@ CREATE TABLE clients (
     last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabela produktów
-CREATE TABLE products (
+-- Produkty
+CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(500) NOT NULL,
     unit VARCHAR(50) NOT NULL DEFAULT 'szt',
@@ -50,34 +53,51 @@ CREATE TABLE products (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE products ADD COLUMN IF NOT EXISTS sku VARCHAR(100);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100);
 
--- Historia cen produktów
-CREATE TABLE product_prices (
+-- Historia cen produktów ('sale' = cena sprzedaży z oferty, 'cost' = cena zakupu)
+CREATE TABLE IF NOT EXISTS product_prices (
     id SERIAL PRIMARY KEY,
     product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
-    price DECIMAL(10,2) NOT NULL,
-    cost_price DECIMAL(10,2) DEFAULT 0,
-    sale_price DECIMAL(10,2), -- Może być redundancyjne do price, ale używane w kodzie
-    margin_percent DECIMAL(5,2) DEFAULT 0,
+    price NUMERIC(12,2) NOT NULL,
+    cost_price NUMERIC(12,2) DEFAULT 0,
+    sale_price NUMERIC(12,2),
+    margin_percent NUMERIC(8,2) DEFAULT 0,
     used_by INTEGER REFERENCES users(id),
     used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE product_prices ADD COLUMN IF NOT EXISTS price_type VARCHAR(20) DEFAULT 'sale';
 
--- Marże produktów (per użytkownik/region)
-CREATE TABLE product_margins (
+-- Marże produktów (per użytkownik)
+CREATE TABLE IF NOT EXISTS product_margins (
     id SERIAL PRIMARY KEY,
     product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id),
-    cost_price DECIMAL(10,2) NOT NULL,
-    margin_percent DECIMAL(5,2) DEFAULT 0,
-    min_margin_percent DECIMAL(5,2) DEFAULT 10,
-    max_discount_percent DECIMAL(5,2) DEFAULT 15,
+    cost_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+    margin_percent NUMERIC(8,2) DEFAULT 0,
+    min_margin_percent NUMERIC(8,2) DEFAULT 10,
+    max_discount_percent NUMERIC(8,2) DEFAULT 15,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(product_id, user_id)
 );
 
+-- Rabaty indywidualne klientów
+CREATE TABLE IF NOT EXISTS client_discounts (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    discount_percent NUMERIC(5,2) NOT NULL,
+    valid_from DATE DEFAULT CURRENT_DATE,
+    valid_until DATE,
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(client_id, product_id)
+);
+
 -- Oferty
-CREATE TABLE offers (
+CREATE TABLE IF NOT EXISTS offers (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
     client_id INTEGER REFERENCES clients(id),
@@ -86,81 +106,122 @@ CREATE TABLE offers (
     client_phone VARCHAR(50),
     delivery_days INTEGER DEFAULT 14,
     valid_days INTEGER DEFAULT 30,
-    additional_costs DECIMAL(10,2) DEFAULT 0,
+    additional_costs NUMERIC(12,2) DEFAULT 0,
     additional_costs_description TEXT,
     notes TEXT,
-    total_net DECIMAL(10,2) DEFAULT 0,
-    total_vat DECIMAL(10,2) DEFAULT 0,
-    total_gross DECIMAL(10,2) DEFAULT 0,
+    total_net NUMERIC(12,2) DEFAULT 0,
+    total_vat NUMERIC(12,2) DEFAULT 0,
+    total_gross NUMERIC(12,2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(50) DEFAULT 'draft' -- draft, sent, accepted, rejected
 );
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS public_token VARCHAR(64);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS follow_up_date DATE;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS lost_reason TEXT;
+-- Akceptacja zarządu: none | pending | approved | rejected
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) DEFAULT 'none';
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS approval_note TEXT;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_offers_public_token ON offers(public_token);
 
 -- Pozycje w ofercie
-CREATE TABLE offer_items (
+CREATE TABLE IF NOT EXISTS offer_items (
     id SERIAL PRIMARY KEY,
     offer_id INTEGER REFERENCES offers(id) ON DELETE CASCADE,
     product_id INTEGER REFERENCES products(id),
     product_name VARCHAR(500) NOT NULL, -- kopia nazwy na wypadek usunięcia produktu
-    quantity DECIMAL(10,3) NOT NULL,
+    quantity NUMERIC(12,3) NOT NULL,
     unit VARCHAR(50) NOT NULL,
-    unit_price DECIMAL(10,2) NOT NULL,
-    vat_rate DECIMAL(5,2) DEFAULT 23.00,
-    net_amount DECIMAL(10,2) NOT NULL,
-    vat_amount DECIMAL(10,2) NOT NULL,
-    gross_amount DECIMAL(10,2) NOT NULL,
-    cost_price DECIMAL(10,2) DEFAULT 0,
-    margin_percent DECIMAL(5,2) DEFAULT 0,
-    discount_percent DECIMAL(5,2) DEFAULT 0,
-    original_price DECIMAL(10,2),
+    unit_price NUMERIC(12,2) NOT NULL,
+    vat_rate NUMERIC(5,2) DEFAULT 23.00,
+    net_amount NUMERIC(12,2) NOT NULL,
+    vat_amount NUMERIC(12,2) NOT NULL,
+    gross_amount NUMERIC(12,2) NOT NULL,
+    cost_price NUMERIC(12,2) DEFAULT 0,
+    margin_percent NUMERIC(8,2) DEFAULT 0,
+    discount_percent NUMERIC(5,2) DEFAULT 0,
+    original_price NUMERIC(12,2),
     position_order INTEGER DEFAULT 1
 );
 
--- Widok podsumowania marży dla ofert
+-- Historia aktywności oferty (zmiany statusu, komentarze, wysyłki, akceptacje)
+CREATE TABLE IF NOT EXISTS offer_activity (
+    id SERIAL PRIMARY KEY,
+    offer_id INTEGER REFERENCES offers(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    actor_name VARCHAR(255),
+    type VARCHAR(50) NOT NULL, -- created, status, comment, email, approval, viewed, client_response, edited
+    message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Kontakty z klientem (telefon, spotkanie, e-mail, notatka)
+CREATE TABLE IF NOT EXISTS client_interactions (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    type VARCHAR(30) NOT NULL, -- call, meeting, email, note
+    content TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Zadania / przypomnienia
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    offer_id INTEGER REFERENCES offers(id) ON DELETE CASCADE,
+    client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+    title VARCHAR(500) NOT NULL,
+    due_date DATE,
+    done BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Szablony ofert
+CREATE TABLE IF NOT EXISTS offer_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Widok podsumowania marży ofert (marża liczona od kosztu: (sprzedaż - koszt) / koszt)
 CREATE OR REPLACE VIEW offer_margin_summary AS
-SELECT 
-    offer_id,
-    SUM(cost_price * quantity) as total_cost,
-    SUM(net_amount - (cost_price * quantity)) as total_margin,
-    CASE 
-        WHEN SUM(net_amount) > 0 THEN 
-            (SUM(net_amount - (cost_price * quantity)) / SUM(net_amount)) * 100
-        ELSE 0 
-    END as margin_percent
-FROM offer_items
-GROUP BY offer_id;
+SELECT
+    oi.offer_id,
+    SUM(oi.cost_price * oi.quantity) AS total_cost,
+    SUM(oi.net_amount - (oi.cost_price * oi.quantity)) AS total_margin,
+    CASE
+        WHEN SUM(oi.cost_price * oi.quantity) > 0 THEN
+            (SUM(oi.net_amount - (oi.cost_price * oi.quantity)) / SUM(oi.cost_price * oi.quantity)) * 100
+        ELSE 0
+    END AS margin_percent,
+    MAX(o.user_id) AS user_id,
+    MAX(o.status) AS status,
+    MAX(o.created_at) AS created_at,
+    SUM(oi.net_amount) AS total_net_items
+FROM offer_items oi
+JOIN offers o ON o.id = oi.offer_id
+GROUP BY oi.offer_id;
 
--- Indeksy dla lepszej wydajności
-CREATE INDEX idx_products_name ON products USING gin(to_tsvector('polish', name));
-CREATE INDEX idx_offers_created_at ON offers(created_at);
-CREATE INDEX idx_offers_user_id ON offers(user_id);
-CREATE INDEX idx_offers_client_id ON offers(client_id);
-CREATE INDEX idx_clients_created_by ON clients(created_by);
-CREATE INDEX idx_product_prices_product_id ON product_prices(product_id);
-CREATE INDEX idx_offer_items_offer_id ON offer_items(offer_id);
-CREATE INDEX idx_product_margins_product_user ON product_margins(product_id, user_id);
-
--- Funkcja do automatycznego czyszczenia starych ofert (starszych niż 2 miesiące)
-CREATE OR REPLACE FUNCTION cleanup_old_offers()
-RETURNS void AS $$
-BEGIN
-    DELETE FROM offers 
-    WHERE created_at < NOW() - INTERVAL '2 months' 
-    AND status = 'draft';
-END;
-$$ LANGUAGE plpgsql;
-
--- Przykładowe dane testowe - NAJPIERW USUŃ ISTNIEJĄCE DANE
--- DELETE FROM offer_items;
--- DELETE FROM offers;
--- DELETE FROM clients;
--- DELETE FROM product_prices;
--- DELETE FROM product_margins;
--- DELETE FROM products;
--- DELETE FROM users;
-
--- Użytkownicy
-INSERT INTO users (email, password_hash, name, role, is_active) VALUES 
-('admin@eltron.pl', '$2a$10$X...', 'Administrator', 'zarząd', true),
-('sprzedaz1@eltron.pl', '$2a$10$X...', 'Jan Kowalski', 'handlowiec', true);
-
+-- Indeksy
+CREATE INDEX IF NOT EXISTS idx_products_name ON products USING gin(to_tsvector('simple', name));
+CREATE INDEX IF NOT EXISTS idx_offers_created_at ON offers(created_at);
+CREATE INDEX IF NOT EXISTS idx_offers_user_id ON offers(user_id);
+CREATE INDEX IF NOT EXISTS idx_offers_client_id ON offers(client_id);
+CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
+CREATE INDEX IF NOT EXISTS idx_clients_created_by ON clients(created_by);
+CREATE INDEX IF NOT EXISTS idx_product_prices_product_id ON product_prices(product_id);
+CREATE INDEX IF NOT EXISTS idx_offer_items_offer_id ON offer_items(offer_id);
+CREATE INDEX IF NOT EXISTS idx_product_margins_product_user ON product_margins(product_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_offer_activity_offer_id ON offer_activity(offer_id);
+CREATE INDEX IF NOT EXISTS idx_client_interactions_client_id ON client_interactions(client_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
