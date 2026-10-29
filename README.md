@@ -15,6 +15,10 @@ Schemat bazy jest w `database-schema.sql` (idempotentny – bezpieczny na istnie
 uruchom `npm run gen:schema`. Kliknięcie „Przygotuj dane demo” wgrywa dane **tylko do pustej bazy**.
 Pełny reset (kasuje wszystko!) jest w panelu *Zespół* dla roli Zarząd.
 
+Baza ze starszej wersji aplikacji jest uzupełniana automatycznie (kolumny i tabele, bez kasowania danych).
+Gdy coś zwraca błędy 500, otwórz `/api/health` – pokaże połączenie z bazą, stan schematu i błędy ostatniej migracji
+(w odpowiedziach 500 w trybie demo jest też pole `detail` z komunikatem bazy).
+
 ## Role w demo
 
 | Rola | Co widzi |

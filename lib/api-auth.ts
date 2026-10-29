@@ -1,7 +1,7 @@
 // lib/api-auth.ts - pomocnik dla endpointów API
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions, userFromSession, ApiUser } from './auth';
+import { authOptions, userFromSession, ApiUser, DEMO_MODE } from './auth';
 import { ensureSchemaReady } from './schema-guard';
 
 export async function getApiUser(): Promise<ApiUser | null> {
@@ -18,7 +18,9 @@ export const badRequest = (msg: string, details?: string[]) =>
   NextResponse.json({ error: msg, details }, { status: 400 });
 export const serverError = (label: string, error: unknown, msg = 'Błąd serwera') => {
   console.error(label, error);
-  return NextResponse.json({ error: msg }, { status: 500 });
+  // W trybie demo dołączamy przyczynę (komunikat bazy), żeby łatwo było ją zobaczyć w zakładce Network
+  const detail = DEMO_MODE && error instanceof Error ? error.message : undefined;
+  return NextResponse.json({ error: msg, detail }, { status: 500 });
 };
 
 // Bezpieczne parsowanie liczb z query stringa

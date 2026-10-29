@@ -96,6 +96,14 @@ CREATE TABLE IF NOT EXISTS client_discounts (
     UNIQUE(client_id, product_id)
 );
 
+-- Tabela rabatów mogła powstać ręcznie w starszej wersji bazy - dopilnuj kompletu kolumn i unikalności pary
+ALTER TABLE client_discounts ADD COLUMN IF NOT EXISTS valid_from DATE DEFAULT CURRENT_DATE;
+ALTER TABLE client_discounts ADD COLUMN IF NOT EXISTS valid_until DATE;
+ALTER TABLE client_discounts ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE client_discounts ADD COLUMN IF NOT EXISTS created_by INTEGER;
+ALTER TABLE client_discounts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_discounts_pair ON client_discounts(client_id, product_id);
+
 -- Oferty
 CREATE TABLE IF NOT EXISTS offers (
     id SERIAL PRIMARY KEY,
@@ -196,7 +204,9 @@ CREATE TABLE IF NOT EXISTS offer_templates (
 );
 
 -- Widok podsumowania marży ofert (marża liczona od kosztu: (sprzedaż - koszt) / koszt)
-CREATE OR REPLACE VIEW offer_margin_summary AS
+-- Widok nie przechowuje danych, więc można go bezpiecznie odtworzyć (także gdy starszy miał inną strukturę)
+DROP VIEW IF EXISTS offer_margin_summary;
+CREATE VIEW offer_margin_summary AS
 SELECT
     oi.offer_id,
     SUM(oi.cost_price * oi.quantity) AS total_cost,
