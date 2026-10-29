@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '../../../../lib/db';
 import { DEMO_MODE } from '../../../../lib/auth';
+import { ensureSchemaReady } from '../../../../lib/schema-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,8 @@ export async function GET() {
     return NextResponse.json({ demo: false, ready: false, users: [] });
   }
   try {
+    // Baza ze starszej wersji aplikacji dostaje brakujące kolumny i tabele (bez utraty danych)
+    await ensureSchemaReady().catch((e) => console.error('Aktualizacja schematu nie powiodła się:', e));
     const result = await db.query(`
       SELECT id, name, first_name, last_name, role, market_region
       FROM users

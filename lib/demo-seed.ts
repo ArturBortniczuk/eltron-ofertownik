@@ -3,11 +3,11 @@
 // Dane są deterministyczne (stałe ziarno), więc po resecie demo wygląda zawsze tak samo.
 import crypto from 'crypto';
 import { db } from './db';
-import { SCHEMA_SQL } from './schema.generated';
+import { runSchema } from './schema-guard';
 import { computeOffer, round2 } from './offer-calc';
 
 export async function ensureSchema() {
-  await db.query(SCHEMA_SQL);
+  await runSchema();
 }
 
 type Q = { query: (text: string, params?: any[]) => Promise<any> };
