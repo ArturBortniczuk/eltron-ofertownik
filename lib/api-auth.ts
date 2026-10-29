@@ -2,8 +2,11 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, userFromSession, ApiUser } from './auth';
+import { ensureSchemaReady } from './schema-guard';
 
 export async function getApiUser(): Promise<ApiUser | null> {
+  // Każdy endpoint zaczyna od tego wywołania - tu dbamy, żeby schemat bazy był aktualny
+  await ensureSchemaReady().catch((e) => console.error('Aktualizacja schematu nie powiodła się:', e));
   const session = await getServerSession(authOptions);
   return userFromSession(session);
 }

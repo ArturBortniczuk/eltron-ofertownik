@@ -128,6 +128,8 @@ ALTER TABLE offers ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) DEFAULT 
 ALTER TABLE offers ADD COLUMN IF NOT EXISTS approval_note TEXT;
 ALTER TABLE offers ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id);
 ALTER TABLE offers ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP;
+-- Stare oferty dostają token publicznego linku (przed utworzeniem unikalnego indeksu)
+UPDATE offers SET public_token = md5(random()::text || id::text || clock_timestamp()::text) WHERE public_token IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_offers_public_token ON offers(public_token);
 
 -- Pozycje w ofercie
