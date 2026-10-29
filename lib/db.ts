@@ -1,4 +1,8 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
+
+// NUMERIC (1700) i BIGINT (20) zwracaj jako liczby, a nie napisy - ułatwia to formatowanie w UI
+types.setTypeParser(1700, (value: string) => parseFloat(value));
+types.setTypeParser(20, (value: string) => parseInt(value, 10));
 
 declare global {
   var _pg: Pool | undefined;

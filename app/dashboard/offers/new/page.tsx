@@ -45,11 +45,44 @@ interface ProductSuggestion {
   max_price: number;
 }
 
+interface OfferTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  payload: { delivery_days?: number; valid_days?: number; notes?: string; items: any[] };
+}
+
+// Przelicza kwoty pozycji (netto/VAT/brutto) - serwer i tak liczy je ponownie
+const withAmounts = (item: any): OfferItem => {
+  const quantity = Number(item.quantity) || 0;
+  const unitPrice = Number(item.unit_price) || 0;
+  const vatRate = item.vat_rate !== undefined ? Number(item.vat_rate) : 23;
+  const net = Math.round(quantity * unitPrice * 100) / 100;
+  const vat = Math.round(net * (vatRate / 100) * 100) / 100;
+  return {
+    product_name: item.product_name,
+    quantity,
+    unit: item.unit || 'szt',
+    unit_price: unitPrice,
+    vat_rate: vatRate,
+    net_amount: net,
+    vat_amount: vat,
+    gross_amount: Math.round((net + vat) * 100) / 100,
+    cost_price: Number(item.cost_price) || 0,
+    margin_percent: Number(item.margin_percent) || 0,
+    discount_percent: Number(item.discount_percent) || 0,
+    original_price: Number(item.original_price) || unitPrice,
+  };
+};
+
 export default function NewOfferPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams?.get('client');
+  const editId = searchParams?.get('edit');
+  const [templates, setTemplates] = useState<OfferTemplate[]>([]);
+  const [notice, setNotice] = useState('');
 
   // Wybór klienta
   const [clients, setClients] = useState<Client[]>([]);
@@ -105,6 +138,49 @@ export default function NewOfferPage() {
       }
     }
   }, [preselectedClientId, clients]);
+
+  useEffect(() => {
+    fetch('/api/templates')
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setTemplates)
+      .catch(() => undefined);
+  }, []);
+
+  // Edycja istniejącej oferty: wczytaj jej dane do formularza
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      const res = await fetch(`/api/offers/${editId}`);
+      if (!res.ok) {
+        setError((await res.json()).error || 'Nie można wczytać oferty do edycji');
+        return;
+      }
+      const d = await res.json();
+      const o = d.offer;
+      setSelectedClient({ id: o.client_id, name: o.client_name, email: o.client_email, phone: o.client_phone });
+      setShowClientSelector(false);
+      setDeliveryDays(o.delivery_days);
+      setValidDays(o.valid_days);
+      setAdditionalCosts(o.additional_costs || 0);
+      setAdditionalCostsDescription(o.additional_costs_description || '');
+      setNotes(o.notes || '');
+      setItems(d.items.map((i: any) => withAmounts(i)));
+    })();
+  }, [editId]);
+
+  const applyTemplate = (id: string) => {
+    const t = templates.find((x) => String(x.id) === id);
+    if (!t) return;
+    setDeliveryDays(t.payload.delivery_days || 14);
+    setValidDays(t.payload.valid_days || 30);
+    setNotes(t.payload.notes || '');
+    setItems(t.payload.items.map((i) => withAmounts(i)));
+    setNotice(`Wczytano szablon „${t.name}”. Dostosuj ilości i ceny, a potem zapisz ofertę.`);
+  };
+
+  const updateItemQuantity = (index: number, quantity: number) => {
+    setItems((prev) => prev.map((it, i) => (i === index ? withAmounts({ ...it, quantity }) : it)));
+  };
 
   const fetchClients = async () => {
     try {
@@ -334,15 +410,24 @@ export default function NewOfferPage() {
         items
       };
 
-      const response = await fetch('/api/offers', {
-        method: 'POST',
+      const response = await fetch(editId ? `/api/offers/${editId}` : '/api/offers', {
+        method: editId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(offerData)
+        body: JSON.stringify(editId ? { ...offerData, action: 'update' } : offerData)
       });
 
       if (response.ok) {
-        const { offerId } = await response.json();
-        router.push(`/dashboard/offers/${offerId}`);
+        const result = await response.json();
+        const savedId = editId || result.offerId;
+        // Przy edycji "Zapisz i wyślij" zmienia dodatkowo status (o ile marża nie wymaga akceptacji)
+        if (editId && status === 'sent' && !result.needsApproval) {
+          await fetch(`/api/offers/${editId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'status', status: 'sent' })
+          });
+        }
+        router.push(`/dashboard/offers/${savedId}`);
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Błąd podczas zapisywania oferty');
@@ -371,7 +456,7 @@ export default function NewOfferPage() {
     <div className="max-w-6xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Nowa oferta</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{editId ? `Edycja oferty #${editId}` : 'Nowa oferta'}</h1>
           <p className="text-gray-600 mt-2">
             {selectedClient ? `Oferta dla: ${selectedClient.name}` : 'Wybierz klienta i utwórz ofertę'}
           </p>
@@ -488,6 +573,25 @@ export default function NewOfferPage() {
               </div>
             </div>
 
+            {/* Szablony */}
+            {!editId && templates.length > 0 && items.length === 0 && (
+              <div className="card bg-sky-50 border-sky-200">
+                <h2 className="text-lg font-semibold text-sky-900 mb-1">⚡ Zacznij od szablonu</h2>
+                <p className="text-sm text-sky-800 mb-3">Wczytaj gotowy zestaw pozycji i tylko dopasuj ilości.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {templates.map((t) => (
+                    <button key={t.id} type="button" onClick={() => applyTemplate(String(t.id))} className="text-left bg-white border border-sky-200 rounded-lg p-3 hover:border-eltron-primary hover:shadow-sm transition">
+                      <div className="font-medium text-gray-900 text-sm">{t.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">{t.payload.items.length} pozycji{t.description ? ` · ${t.description}` : ''}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {notice && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">{notice}</div>
+            )}
+
             {/* Parametry oferty */}
             <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Parametry oferty</h2>
@@ -564,6 +668,7 @@ export default function NewOfferPage() {
                       <option value="m">m</option>
                       <option value="kg">kg</option>
                       <option value="opak">opak</option>
+                      <option value="kpl">kpl</option>
                       <option value="godz">godz</option>
                       <option value="usł">usł</option>
                     </select>
@@ -740,9 +845,17 @@ export default function NewOfferPage() {
                     <div key={index} className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
                       <div className="flex-1">
                         <div className="font-medium text-gray-900">{item.product_name}</div>
-                        <div className="text-sm text-gray-600">
-                          {item.quantity} {item.unit} × {item.unit_price.toFixed(2)} zł
-                          = {item.gross_amount.toFixed(2)} zł brutto
+                        <div className="text-sm text-gray-600 flex items-center gap-2 flex-wrap">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={item.quantity}
+                            onChange={(e) => updateItemQuantity(index, parseFloat(e.target.value) || 0)}
+                            className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                            aria-label="Ilość"
+                          />
+                          <span>{item.unit} × {item.unit_price.toFixed(2)} zł = {item.gross_amount.toFixed(2)} zł brutto</span>
                         </div>
                         {item.cost_price > 0 && (
                           <div className="text-xs text-gray-500 mt-1">
@@ -883,7 +996,7 @@ export default function NewOfferPage() {
                   disabled={saving}
                   className="w-full btn-secondary disabled:opacity-50"
                 >
-                  {saving ? 'Zapisywanie...' : '💾 Zapisz jako szkic'}
+                  {saving ? 'Zapisywanie...' : editId ? '💾 Zapisz zmiany' : '💾 Zapisz jako szkic'}
                 </button>
 
                 <button
@@ -893,6 +1006,9 @@ export default function NewOfferPage() {
                 >
                   {saving ? 'Zapisywanie...' : '📤 Zapisz i wyślij'}
                 </button>
+                <p className="text-xs text-gray-500">
+                  Oferta ze zbyt niską marżą zapisze się jako szkic i trafi do akceptacji zarządu.
+                </p>
               </div>
 
               {selectedClient && (

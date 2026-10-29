@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "gen:schema": "node scripts/gen-schema.js"
   },
   "dependencies": {
     "next": "14.0.4",

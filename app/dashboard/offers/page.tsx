@@ -1,347 +1,284 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { canAccessAllData } from '../../../lib/client-auth-utils';
+import { formatCurrency, formatDate, marginBadge, STATUS_META } from '../../../lib/format';
+import { StatusBadge, ApprovalBadge } from '../../components/StatusBadge';
 
 interface Offer {
   id: number;
+  user_id: number;
   client_name: string;
   client_email?: string;
-  client_phone?: string;
-  delivery_days: number;
-  valid_days: number;
   total_gross: number;
   status: string;
   created_at: string;
+  approval_status?: string;
+  follow_up_date?: string | null;
+  view_count?: number;
+  public_token?: string;
+  salesperson_name?: string;
+  market_region?: string;
+  margin_percent?: number;
+  total_margin?: number;
 }
 
-interface OffersResponse {
-  offers: Offer[];
-  pagination: {
-    currentPage: number;
-    totalPages: number;
-    totalCount: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-}
+const FILTERS = ['', 'draft', 'sent', 'accepted', 'rejected'] as const;
 
 export default function OffersListPage() {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const canViewAll = canAccessAllData(session);
+
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [pagination, setPagination] = useState({
-    currentPage: 1,
-    totalPages: 1,
-    totalCount: 0,
-    hasNext: false,
-    hasPrev: false
-  });
+  const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalCount: 0, hasNext: false, hasPrev: false });
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [totalValue, setTotalValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [approvalOnly, setApprovalOnly] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [sort, setSort] = useState('created_desc');
+  const [salesperson, setSalesperson] = useState('');
+  const [people, setPeople] = useState<Array<{ id: number; name: string }>>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [copied, setCopied] = useState<number | null>(null);
+  const [duplicating, setDuplicating] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
 
-  useEffect(() => {
-    fetchOffers();
-  }, [currentPage, statusFilter]);
-  
-  const fetchOffers = async () => {
-    setLoading(true);
+  const toggleOne = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const runBulk = async (body: Record<string, unknown>, confirmText?: string) => {
+    if (confirmText && !confirm(confirmText)) return;
+    setBulkBusy(true);
+    setBulkMsg('');
     try {
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '10'
-      });
-      
-      if (statusFilter) {
-        params.append('status', statusFilter);
+      const res = await fetch('/api/offers/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: selected, ...body }) });
+      const d = await res.json();
+      if (res.ok) {
+        const skipped = d.skipped?.length ? ` Pominięto ${d.skipped.length}: ${d.skipped.slice(0, 3).map((s: any) => `#${s.id} (${s.reason})`).join(', ')}${d.skipped.length > 3 ? '...' : ''}.` : '';
+        setBulkMsg(`Zmieniono ${d.updated} ofert.${skipped}`);
+        setSelected([]);
+        fetchOffers();
+      } else {
+        setBulkMsg(d.error || 'Akcja zbiorcza nie powiodła się');
       }
-
-      const response = await fetch(`/api/offers?${params}`);
-      if (response.ok) {
-        const data: OffersResponse = await response.json();
-        setOffers(data.offers);
-        setPagination(data.pagination);
-      }
-    } catch (error) {
-      console.error('Error fetching offers:', error);
     } finally {
-      setLoading(false);
+      setBulkBusy(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusMap = {
-      draft: { label: 'Szkic', class: 'bg-gray-100 text-gray-800' },
-      sent: { label: 'Wysłana', class: 'bg-blue-100 text-blue-800' },
-      accepted: { label: 'Zaakceptowana', class: 'bg-green-100 text-green-800' },
-      rejected: { label: 'Odrzucona', class: 'bg-red-100 text-red-800' }
-    };
-    
-    const statusInfo = statusMap[status as keyof typeof statusMap] || statusMap.draft;
-    
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.class}`}>
-        {statusInfo.label}
-      </span>
-    );
+  useEffect(() => {
+    const t = setTimeout(() => { setDebounced(search); setCurrentPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    if (!canViewAll) return;
+    fetch('/api/demo/users').then((r) => r.json()).then((d) => setPeople((d.users || []).filter((u: any) => u.role !== 'zarząd'))).catch(() => undefined);
+  }, [canViewAll]);
+
+  const fetchOffers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(currentPage), limit: '12', sort });
+      if (statusFilter) params.set('status', statusFilter);
+      if (debounced) params.set('q', debounced);
+      if (approvalOnly) params.set('approval', 'pending');
+      if (salesperson) params.set('user_id', salesperson);
+      const response = await fetch(`/api/offers?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        setOffers(data.offers);
+        setPagination(data.pagination);
+        setStatusCounts(data.statusCounts || {});
+        setTotalValue(data.totalValue || 0);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, statusFilter, debounced, approvalOnly, sort, salesperson]);
+
+  useEffect(() => {
+    fetchOffers();
+  }, [fetchOffers]);
+
+  const duplicate = async (id: number) => {
+    setDuplicating(id);
+    try {
+      const res = await fetch(`/api/offers/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'duplicate' }) });
+      if (res.ok) router.push(`/dashboard/offers/${(await res.json()).offerId}`);
+    } finally {
+      setDuplicating(null);
+    }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('pl-PL', {
-      style: 'currency',
-      currency: 'PLN'
-    }).format(amount);
+  const copyLink = async (offer: Offer) => {
+    if (!offer.public_token) return;
+    await navigator.clipboard?.writeText(`${window.location.origin}/o/${offer.public_token}`).catch(() => undefined);
+    setCopied(offer.id);
+    setTimeout(() => setCopied(null), 1800);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pl-PL');
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-  };
-
-  const handleStatusFilter = (status: string) => {
-    setStatusFilter(status);
-    setCurrentPage(1);
-  };
+  const allCount = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Moje oferty</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{canViewAll ? 'Wszystkie oferty' : 'Moje oferty'}</h1>
           <p className="text-gray-600 mt-2">
-            Zarządzaj swoimi ofertami ({pagination.totalCount} łącznie)
+            {pagination.totalCount} ofert · łączna wartość brutto {formatCurrency(totalValue)}
           </p>
         </div>
-        <Link href="/dashboard/offers/new" className="btn-primary">
-          ➕ Nowa oferta
-        </Link>
-      </div>
-
-      {/* Filtry */}
-      <div className="card">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleStatusFilter('')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              statusFilter === '' 
-                ? 'bg-eltron-primary text-white' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Wszystkie ({pagination.totalCount})
-          </button>
-          <button
-            onClick={() => handleStatusFilter('draft')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              statusFilter === 'draft' 
-                ? 'bg-eltron-primary text-white' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Szkice
-          </button>
-          <button
-            onClick={() => handleStatusFilter('sent')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              statusFilter === 'sent' 
-                ? 'bg-eltron-primary text-white' 
-                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-            }`}
-          >
-            Wysłane
-          </button>
-          <button
-            onClick={() => handleStatusFilter('accepted')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              statusFilter === 'accepted' 
-                ? 'bg-eltron-primary text-white' 
-                : 'bg-green-100 text-green-700 hover:bg-green-200'
-            }`}
-          >
-            Zaakceptowane
-          </button>
-          <button
-            onClick={() => handleStatusFilter('rejected')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              statusFilter === 'rejected' 
-                ? 'bg-eltron-primary text-white' 
-                : 'bg-red-100 text-red-700 hover:bg-red-200'
-            }`}
-          >
-            Odrzucone
-          </button>
+        <div className="flex gap-2 flex-wrap">
+          <a href={`/api/export/offers${statusFilter ? `?status=${statusFilter}` : ''}`} className="btn-secondary">⬇ Eksport CSV</a>
+          <Link href="/dashboard/compare" className="btn-secondary">⚖️ Porównaj</Link>
+          <Link href="/dashboard/offers/new" className="btn-primary">➕ Nowa oferta</Link>
         </div>
       </div>
 
-      {/* Lista ofert */}
-      {loading ? (
-        <div className="card">
-          <div className="animate-pulse space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
-          </div>
+      <div className="card space-y-4">
+        <div className="flex flex-col md:flex-row gap-3">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} className="input-field flex-1" placeholder="Szukaj po kliencie lub numerze oferty..." />
+          {canViewAll && (
+            <select value={salesperson} onChange={(e) => { setSalesperson(e.target.value); setCurrentPage(1); }} className="input-field md:!w-56">
+              <option value="">Wszyscy handlowcy</option>
+              {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+          <select value={sort} onChange={(e) => setSort(e.target.value)} className="input-field md:!w-48">
+            <option value="created_desc">Najnowsze</option>
+            <option value="created_asc">Najstarsze</option>
+            <option value="value_desc">Najwyższa wartość</option>
+            <option value="value_asc">Najniższa wartość</option>
+          </select>
         </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          {FILTERS.map((s) => (
+            <button
+              key={s || 'all'}
+              onClick={() => { setStatusFilter(s); setCurrentPage(1); }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statusFilter === s ? 'bg-eltron-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              {s ? STATUS_META[s].label : 'Wszystkie'} ({s ? statusCounts[s] || 0 : allCount})
+            </button>
+          ))}
+          <label className="flex items-center gap-2 text-sm text-gray-700 ml-2">
+            <input type="checkbox" checked={approvalOnly} onChange={(e) => { setApprovalOnly(e.target.checked); setCurrentPage(1); }} />
+            Tylko czekające na akceptację
+          </label>
+        </div>
+      </div>
+
+      {loading && offers.length === 0 ? (
+        <div className="card animate-pulse space-y-4">{[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-gray-200 rounded" />)}</div>
       ) : offers.length === 0 ? (
         <div className="card text-center py-12">
           <div className="text-4xl mb-4">📋</div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {statusFilter ? 'Brak ofert w tej kategorii' : 'Nie masz jeszcze żadnych ofert'}
-          </h3>
-          <p className="text-gray-600 mb-6">
-            {statusFilter 
-              ? 'Spróbuj wybrać inny filtr lub utwórz nową ofertę.'
-              : 'Utwórz swoją pierwszą ofertę, aby zacząć.'}
-          </p>
-          <Link href="/dashboard/offers/new" className="btn-primary">
-            Utwórz ofertę
-          </Link>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Brak ofert spełniających kryteria</h3>
+          <p className="text-gray-600 mb-6">Zmień filtry lub utwórz nową ofertę.</p>
+          <Link href="/dashboard/offers/new" className="btn-primary">Utwórz ofertę</Link>
         </div>
       ) : (
-        <div className="card">
-          {/* Tabela desktop */}
-          <div className="hidden md:block overflow-x-auto">
+        <div className={`card ${loading ? 'opacity-60' : ''}`}>
+          {bulkMsg && <div className="mb-4 bg-sky-50 border border-sky-200 text-sky-800 text-sm rounded-lg p-3">{bulkMsg}</div>}
+          {selected.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 bg-eltron-primary text-white rounded-lg px-4 py-3 text-sm">
+              <strong>Zaznaczono: {selected.length}</strong>
+              <span className="mx-1 opacity-60">|</span>
+              {(['sent', 'accepted', 'rejected', 'draft'] as const).map((s) => (
+                <button key={s} disabled={bulkBusy} onClick={() => runBulk({ action: 'status', status: s })} className="bg-white/15 hover:bg-white/25 rounded px-3 py-1 disabled:opacity-50">
+                  → {STATUS_META[s].label}
+                </button>
+              ))}
+              <button disabled={bulkBusy} onClick={() => runBulk({ action: 'extend', days: 14 })} className="bg-white/15 hover:bg-white/25 rounded px-3 py-1 disabled:opacity-50">⏳ +14 dni ważności</button>
+              <button disabled={bulkBusy} onClick={() => runBulk({ action: 'delete' }, `Usunąć ${selected.length} zaznaczonych ofert? Tej operacji nie można cofnąć.`)} className="bg-red-500/80 hover:bg-red-500 rounded px-3 py-1 disabled:opacity-50">🗑️ Usuń</button>
+              <button onClick={() => setSelected([])} className="ml-auto underline opacity-80 hover:opacity-100">Odznacz</button>
+            </div>
+          )}
+          <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Nr oferty</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Klient</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Wartość</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Data</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Akcje</th>
+                <tr className="border-b border-gray-200 text-left text-sm text-gray-700">
+                  <th className="py-3 px-3 w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="Zaznacz wszystkie na stronie"
+                      checked={offers.length > 0 && offers.every((o) => selected.includes(o.id))}
+                      onChange={(e) => setSelected(e.target.checked ? offers.map((o) => o.id) : [])}
+                    />
+                  </th>
+                  <th className="py-3 px-3 font-medium">Nr</th>
+                  <th className="py-3 px-3 font-medium">Klient</th>
+                  {canViewAll && <th className="py-3 px-3 font-medium">Handlowiec</th>}
+                  <th className="py-3 px-3 font-medium text-right">Wartość</th>
+                  {canViewAll && <th className="py-3 px-3 font-medium text-right">Marża</th>}
+                  <th className="py-3 px-3 font-medium">Status</th>
+                  <th className="py-3 px-3 font-medium">Data</th>
+                  <th className="py-3 px-3 font-medium text-right">Akcje</th>
                 </tr>
               </thead>
               <tbody>
-                {offers.map((offer) => (
-                  <tr key={offer.id} className="table-row">
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-eltron-primary">#{offer.id}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-gray-900">{offer.client_name}</div>
-                      {offer.client_email && (
-                        <div className="text-sm text-gray-600">{offer.client_email}</div>
+                {offers.map((offer) => {
+                  const overdue = offer.status === 'sent' && offer.follow_up_date && offer.follow_up_date.slice(0, 10) <= today;
+                  return (
+                    <tr key={offer.id} className={`table-row ${selected.includes(offer.id) ? 'bg-sky-50' : ''}`}>
+                      <td className="py-3 px-3"><input type="checkbox" aria-label={`Zaznacz ofertę ${offer.id}`} checked={selected.includes(offer.id)} onChange={() => toggleOne(offer.id)} /></td>
+                      <td className="py-3 px-3 font-medium text-eltron-primary">#{offer.id}</td>
+                      <td className="py-3 px-3">
+                        <Link href={`/dashboard/offers/${offer.id}`} className="font-medium text-gray-900 hover:text-eltron-primary">{offer.client_name}</Link>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {overdue && <span className="text-xs text-red-600">📞 czas na kontakt</span>}
+                          {offer.status === 'sent' && !!offer.view_count && <span className="text-xs text-sky-600">👀 {offer.view_count}x</span>}
+                        </div>
+                      </td>
+                      {canViewAll && (
+                        <td className="py-3 px-3 text-sm text-gray-600">{offer.salesperson_name}<div className="text-xs text-gray-400">{offer.market_region}</div></td>
                       )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-medium">{formatCurrency(offer.total_gross)}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      {getStatusBadge(offer.status)}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {formatDate(offer.created_at)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex space-x-2">
-                        <Link 
-                          href={`/dashboard/offers/${offer.id}`}
-                          className="text-eltron-primary hover:text-eltron-primary/80 text-sm font-medium"
-                        >
-                          Podgląd
-                        </Link>
-                        {/* PDF button będzie w szczegółach oferty */}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="py-3 px-3 text-right font-medium whitespace-nowrap">{formatCurrency(offer.total_gross)}</td>
+                      {canViewAll && (
+                        <td className="py-3 px-3 text-right">
+                          {offer.margin_percent
+                            ? <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${marginBadge(offer.margin_percent)}`}>{offer.margin_percent.toFixed(1)}%</span>
+                            : <span className="text-gray-400">-</span>}
+                        </td>
+                      )}
+                      <td className="py-3 px-3">
+                        <div className="flex flex-col items-start gap-1"><StatusBadge status={offer.status} /><ApprovalBadge status={offer.approval_status} /></div>
+                      </td>
+                      <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{formatDate(offer.created_at)}</td>
+                      <td className="py-3 px-3">
+                        <div className="flex gap-3 justify-end text-sm whitespace-nowrap">
+                          <Link href={`/dashboard/offers/${offer.id}`} className="text-eltron-primary hover:underline font-medium">Podgląd</Link>
+                          <button onClick={() => duplicate(offer.id)} disabled={duplicating === offer.id} className="text-gray-600 hover:text-eltron-primary disabled:opacity-50">
+                            {duplicating === offer.id ? '...' : 'Kopiuj'}
+                          </button>
+                          {offer.status !== 'draft' && offer.public_token && (
+                            <button onClick={() => copyLink(offer)} className="text-gray-600 hover:text-eltron-primary">{copied === offer.id ? '✓ Skopiowano' : '🔗 Link'}</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {/* Karty mobile */}
-          <div className="md:hidden space-y-4">
-            {offers.map((offer) => (
-              <div key={offer.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="font-medium text-eltron-primary">Oferta #{offer.id}</div>
-                    <div className="font-medium text-gray-900">{offer.client_name}</div>
-                  </div>
-                  {getStatusBadge(offer.status)}
-                </div>
-                
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Wartość:</span>
-                    <span className="font-medium">{formatCurrency(offer.total_gross)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Data:</span>
-                    <span>{formatDate(offer.created_at)}</span>
-                  </div>
-                </div>
-
-                <div className="flex space-x-3 mt-4 pt-3 border-t border-gray-200">
-                  <Link 
-                    href={`/dashboard/offers/${offer.id}`}
-                    className="text-eltron-primary hover:text-eltron-primary/80 text-sm font-medium"
-                  >
-                    Podgląd
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Paginacja */}
           {pagination.totalPages > 1 && (
             <div className="flex justify-between items-center mt-6 pt-6 border-t border-gray-200">
-              <div className="text-sm text-gray-600">
-                Strona {pagination.currentPage} z {pagination.totalPages}
-                ({pagination.totalCount} ofert)
-              </div>
-              
+              <div className="text-sm text-gray-600">Strona {pagination.currentPage} z {pagination.totalPages}</div>
               <div className="flex space-x-2">
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage - 1)}
-                  disabled={!pagination.hasPrev}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  ← Poprzednia
-                </button>
-                
-                {/* Numery stron */}
-                <div className="flex space-x-1">
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (pagination.totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (pagination.currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (pagination.currentPage >= pagination.totalPages - 2) {
-                      pageNum = pagination.totalPages - 4 + i;
-                    } else {
-                      pageNum = pagination.currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handlePageChange(pageNum)}
-                        className={`px-3 py-1 border rounded text-sm ${
-                          pageNum === pagination.currentPage
-                            ? 'bg-eltron-primary text-white border-eltron-primary'
-                            : 'border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                <button
-                  onClick={() => handlePageChange(pagination.currentPage + 1)}
-                  disabled={!pagination.hasNext}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  Następna →
-                </button>
+                <button onClick={() => setCurrentPage(currentPage - 1)} disabled={!pagination.hasPrev} className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 hover:bg-gray-50">← Poprzednia</button>
+                <button onClick={() => setCurrentPage(currentPage + 1)} disabled={!pagination.hasNext} className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 hover:bg-gray-50">Następna →</button>
               </div>
             </div>
           )}

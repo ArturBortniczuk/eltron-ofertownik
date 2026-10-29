@@ -136,8 +136,8 @@ export async function POST(request: NextRequest) {
 
     // Dodaj do historii cen
     await db.query(`
-      INSERT INTO product_prices (product_id, price, used_by)
-      VALUES ($1, $2, $3)
+      INSERT INTO product_prices (product_id, price, cost_price, price_type, used_by)
+      VALUES ($1, $2, $2, 'cost', $3)
     `, [product_id, cost_price, userId]);
 
     const basePrice = cost_price * (1 + margin_percent / 100);

@@ -1,148 +1,84 @@
 // app/api/clients/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../lib/auth';
 import { db } from '../../../../lib/db';
+import { getApiUser, unauthorized, forbidden, notFound, badRequest, serverError } from '../../../../lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+async function loadClient(id: number) {
+  const r = await db.query(
+    `SELECT c.*, u.name AS owner_name FROM clients c LEFT JOIN users u ON u.id = c.created_by WHERE c.id = $1`,
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const user = await getApiUser();
+    if (!user) return unauthorized();
+    const clientId = parseInt(params.id, 10);
+    if (!Number.isInteger(clientId)) return badRequest('Nieprawidłowy ID klienta');
 
-    const userId = parseInt(session.user.id);
-    const clientId = parseInt(params.id);
+    const client = await loadClient(clientId);
+    if (!client) return notFound('Klient nie został znaleziony');
+    if (!user.canViewAll && client.created_by !== user.id) return forbidden('Ten klient należy do innego handlowca');
 
-    const result = await db.query(`
-      SELECT * FROM clients 
-      WHERE id = $1 AND created_by = $2
-    `, [clientId, userId]);
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({ error: 'Klient nie został znaleziony' }, { status: 404 });
-    }
-
-    return NextResponse.json(result.rows[0]);
-
+    return NextResponse.json(client);
   } catch (error) {
-    console.error('Get client error:', error);
-    return NextResponse.json(
-      { error: 'Błąd pobierania klienta' },
-      { status: 500 }
-    );
+    return serverError('Get client error:', error, 'Błąd pobierania klienta');
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = parseInt(session.user.id);
-    const clientId = parseInt(params.id);
+    const user = await getApiUser();
+    if (!user) return unauthorized();
+    const clientId = parseInt(params.id, 10);
+    if (!Number.isInteger(clientId)) return badRequest('Nieprawidłowy ID klienta');
     const data = await request.json();
 
-    // Sprawdź czy klient należy do użytkownika
-    const clientCheck = await db.query(
-      'SELECT id FROM clients WHERE id = $1 AND created_by = $2',
-      [clientId, userId]
+    const existing = await loadClient(clientId);
+    if (!existing) return notFound('Klient nie został znaleziony');
+    if (existing.created_by !== user.id && !user.isManagement) return forbidden();
+
+    const result = await db.query(
+      `UPDATE clients SET
+         name = COALESCE($1, name), email = COALESCE($2, email), phone = COALESCE($3, phone),
+         address = COALESCE($4, address), nip = COALESCE($5, nip), contact_person = COALESCE($6, contact_person),
+         notes = COALESCE($7, notes), last_used = COALESCE($8, last_used)
+       WHERE id = $9 RETURNING *`,
+      [
+        data.name || null, data.email || null, data.phone || null, data.address || null, data.nip || null,
+        data.contact_person || null, data.notes || null, data.last_used || null, clientId,
+      ]
     );
 
-    if (clientCheck.rows.length === 0) {
-      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 403 });
-    }
-
-    // Zaktualizuj klienta
-    const result = await db.query(`
-      UPDATE clients SET 
-        name = COALESCE($1, name),
-        email = COALESCE($2, email),
-        phone = COALESCE($3, phone),
-        address = COALESCE($4, address),
-        nip = COALESCE($5, nip),
-        contact_person = COALESCE($6, contact_person),
-        notes = COALESCE($7, notes),
-        last_used = COALESCE($8, last_used)
-      WHERE id = $9 AND created_by = $10
-      RETURNING *
-    `, [
-      data.name || null,
-      data.email || null,
-      data.phone || null,
-      data.address || null,
-      data.nip || null,
-      data.contact_person || null,
-      data.notes || null,
-      data.last_used || null,
-      clientId,
-      userId
-    ]);
-
-    return NextResponse.json({
-      success: true,
-      client: result.rows[0],
-      message: 'Klient został zaktualizowany'
-    });
-
+    return NextResponse.json({ success: true, client: result.rows[0], message: 'Klient został zaktualizowany' });
   } catch (error) {
-    console.error('Update client error:', error);
-    return NextResponse.json(
-      { error: 'Błąd podczas aktualizacji klienta' },
-      { status: 500 }
-    );
+    return serverError('Update client error:', error, 'Błąd podczas aktualizacji klienta');
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await getApiUser();
+    if (!user) return unauthorized();
+    const clientId = parseInt(params.id, 10);
+    if (!Number.isInteger(clientId)) return badRequest('Nieprawidłowy ID klienta');
+
+    const existing = await loadClient(clientId);
+    if (!existing) return notFound('Klient nie został znaleziony');
+    if (existing.created_by !== user.id && !user.isManagement) return forbidden();
+
+    const offers = await db.query('SELECT COUNT(*) AS n FROM offers WHERE client_id = $1', [clientId]);
+    if (offers.rows[0].n > 0) {
+      return badRequest(`Klient ma ${offers.rows[0].n} ofert - najpierw je usuń albo zostaw klienta w bazie`);
     }
 
-    const userId = parseInt(session.user.id);
-    const clientId = parseInt(params.id);
-
-    // Sprawdź czy klient należy do użytkownika
-    const clientCheck = await db.query(
-      'SELECT id FROM clients WHERE id = $1 AND created_by = $2',
-      [clientId, userId]
-    );
-
-    if (clientCheck.rows.length === 0) {
-      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 403 });
-    }
-
-    // Usuń klienta
     await db.query('DELETE FROM clients WHERE id = $1', [clientId]);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Klient został usunięty'
-    });
-
+    return NextResponse.json({ success: true, message: 'Klient został usunięty' });
   } catch (error) {
-    console.error('Delete client error:', error);
-    return NextResponse.json(
-      { error: 'Błąd podczas usuwania klienta' },
-      { status: 500 }
-    );
+    return serverError('Delete client error:', error, 'Błąd podczas usuwania klienta');
   }
 }
