@@ -17,6 +17,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [notifications, setNotifications] = useState<NotificationData | null>(null);
+  const [overdue, setOverdue] = useState<{ count: number; limit: number; blocked: boolean } | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -31,6 +32,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       try {
         const res = await fetch('/api/notifications');
         if (res.ok && !cancelled) setNotifications(await res.json());
+        const od = await fetch('/api/offers/overdue');
+        if (od.ok && !cancelled) setOverdue(await od.json());
       } catch {
         /* powiadomienia są opcjonalne */
       }
@@ -59,7 +62,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const nav: Array<{ href: string; label: string; badge?: number }> = [
     { href: '/dashboard', label: 'Pulpit' },
     { href: '/dashboard/pipeline', label: 'Lejek ofert' },
-    { href: '/dashboard/offers', label: canViewAll ? 'Wszystkie oferty' : 'Moje oferty' },
+    { href: '/dashboard/inquiry', label: 'Wczytaj zapytanie' },
+    { href: '/dashboard/offers', label: canViewAll ? 'Wszystkie oferty' : 'Moje oferty', badge: overdue?.count },
     { href: '/dashboard/clients', label: 'Klienci' },
     { href: '/dashboard/products', label: 'Produkty' },
     { href: '/dashboard/tasks', label: 'Zadania', badge: notifications?.counts.tasks },
@@ -68,6 +72,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     { href: '/dashboard/activity', label: 'Aktywność' },
   ];
   if (isManagement) nav.push({ href: '/dashboard/approvals', label: 'Akceptacje', badge: notifications?.counts.approvals });
+  if (canViewAll) nav.push({ href: '/dashboard/management', label: 'Panel zarządczy' });
   if (canViewAll) nav.push({ href: '/dashboard/margins', label: 'Marże' });
   if (isManagement) nav.push({ href: '/dashboard/admin', label: 'Zespół' });
 
@@ -128,6 +133,18 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           Zmień rolę w prawym górnym rogu, aby zobaczyć różnice.
         </div>
       </div>
+
+      {overdue && overdue.count > 0 && pathname !== '/dashboard/offers' && (
+        <div className={`border-b px-4 py-2 ${overdue.blocked ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+          <div className={`max-w-7xl mx-auto text-xs sm:text-sm flex flex-wrap items-center gap-x-3 ${overdue.blocked ? 'text-red-900' : 'text-orange-900'}`}>
+            <span>
+              {overdue.blocked ? '⛔' : '⏰'} <strong>{overdue.count}</strong> {overdue.count === 1 ? 'oferta czeka' : 'ofert czeka'} na oznaczenie wyniku (wygrana / przegrana / częściowo).
+              {overdue.blocked ? ` Limit ${overdue.limit} przekroczony – nowe oferty są zablokowane.` : ` Po przekroczeniu limitu ${overdue.limit} nowe oferty zostaną zablokowane.`}
+            </span>
+            <Link href="/dashboard/offers?overdue=1" className="underline font-medium">Rozlicz teraz →</Link>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
     </div>

@@ -3,7 +3,8 @@ import { db } from '../../../lib/db';
 import { validateCreateOffer } from '../../../lib/validation';
 import { computeOffer } from '../../../lib/offer-calc';
 import { getApiUser, unauthorized, serverError, intParam } from '../../../lib/api-auth';
-import { insertOfferItems, logActivity, newToken } from '../../../lib/offers-db';
+import { insertOfferItems, logActivity, newToken, nextOfferNumber, overdueOffers, cleanRemarks } from '../../../lib/offers-db';
+import { OPEN_OFFERS_LIMIT, OVERDUE_GRACE_DAYS } from '../../../lib/offer-rules';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,18 @@ export async function POST(request: NextRequest) {
     const validation = validateCreateOffer(data);
     if (!validation.isValid) {
       return NextResponse.json({ error: 'Błąd walidacji', details: validation.errors }, { status: 400 });
+    }
+
+    // Limit ofert „wiszących”: najpierw rozlicz stare oferty (wygrana / przegrana / częściowo)
+    if (!user.isManagement) {
+      const overdue = await overdueOffers(db, user.id);
+      if (overdue.length >= OPEN_OFFERS_LIMIT) {
+        return NextResponse.json({
+          error: `Masz ${overdue.length} ofert bez oznaczonego wyniku (limit: ${OPEN_OFFERS_LIMIT}). Oznacz je jako wygrane, przegrane lub wygrane częściowo, aby tworzyć nowe.`,
+          code: 'OVERDUE_LIMIT',
+          overdue: overdue.slice(0, 10),
+        }, { status: 409 });
+      }
     }
 
     // Ceny i sumy zawsze liczymy po stronie serwera
@@ -38,13 +51,17 @@ export async function POST(request: NextRequest) {
       await client.query('BEGIN');
 
       const additional = Math.max(0, Number(data.additional_costs) || 0);
+      const offerNumber = await nextOfferNumber(client);
       const offerResult = await client.query(
         `INSERT INTO offers (
            user_id, client_id, client_name, client_email, client_phone,
            delivery_days, valid_days, additional_costs, additional_costs_description,
            notes, total_net, total_vat, total_gross, status, public_token,
-           approval_status, sent_at, follow_up_date
+           approval_status, offer_number, revision, is_current, project_name, segment, offer_type,
+           tender_deadline, contact_person, remarks, approval_level, cc_emails,
+           sent_at, follow_up_date
          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+           $17,0,true,$18,$19,$20,$21,$22,$23,$24,$25,
            ${status === 'sent' ? 'CURRENT_TIMESTAMP' : 'NULL'},
            ${status === 'sent' ? "CURRENT_DATE + 5" : 'NULL'})
          RETURNING id`,
@@ -52,6 +69,11 @@ export async function POST(request: NextRequest) {
           user.id, data.client_id || null, data.client_name, data.client_email || null, data.client_phone || null,
           data.delivery_days, data.valid_days, additional, data.additional_costs_description || null,
           data.notes || null, calc.totals.net, calc.totals.vat, calc.totals.gross, status, newToken(), approval,
+          offerNumber, String(data.project_name).trim(), String(data.segment).trim(),
+          data.offer_type === 'przetarg' ? 'przetarg' : 'zakup',
+          data.offer_type === 'przetarg' && data.tender_deadline ? String(data.tender_deadline).slice(0, 10) : null,
+          String(data.contact_person || '').trim() || null, JSON.stringify(cleanRemarks(data.remarks)),
+          calc.approvalLevel, String(data.cc_emails || '').trim() || null,
         ]
       );
       const offerId = offerResult.rows[0].id;
@@ -62,7 +84,7 @@ export async function POST(request: NextRequest) {
 
       await insertOfferItems(client, offerId, calc.items, user);
 
-      await logActivity(client, offerId, user, 'created', 'Utworzono ofertę');
+      await logActivity(client, offerId, user, 'created', `Utworzono ofertę ${offerNumber}: ${String(data.project_name).trim()}`);
       if (approval === 'pending') {
         await logActivity(client, offerId, user, 'approval', `Oferta wymaga akceptacji zarządu: ${calc.approvalReasons.join('; ')}`);
       }
@@ -73,6 +95,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         offerId,
+        offerNumber,
         status,
         approval_status: approval,
         needsApproval: calc.needsApproval,
@@ -121,12 +144,23 @@ export async function GET(request: NextRequest) {
     else if (salesperson) add('o.user_id = ?', parseInt(salesperson, 10) || 0);
     if (clientId) add('o.client_id = ?', parseInt(clientId, 10) || 0);
     if (approval) add('o.approval_status = ?', approval);
+    if (searchParams.get('versions') !== 'all') conditions.push('o.is_current IS NOT FALSE');
+    const segment = searchParams.get('segment');
+    const offerType = searchParams.get('type');
+    const outcome = searchParams.get('outcome');
+    if (segment) add('o.segment = ?', segment);
+    if (offerType) add('o.offer_type = ?', offerType);
+    if (outcome) add('o.outcome = ?', outcome);
+    if (searchParams.get('overdue') === '1') {
+      params.push(OVERDUE_GRACE_DAYS);
+      conditions.push(`o.status = 'sent' AND COALESCE(o.sent_at, o.created_at) + (o.valid_days + $${params.length}) * INTERVAL '1 day' < NOW()`);
+    }
     if (q) {
       params.push(`%${q}%`);
       const idx = params.length;
       const asId = /^#?\d+$/.test(q) ? parseInt(q.replace('#', ''), 10) : -1;
       params.push(asId);
-      conditions.push(`(o.client_name ILIKE $${idx} OR o.id = $${params.length})`);
+      conditions.push(`(o.client_name ILIKE $${idx} OR o.project_name ILIKE $${idx} OR o.offer_number ILIKE $${idx} OR o.id = $${params.length})`);
     }
     const baseWhere = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -149,12 +183,14 @@ export async function GET(request: NextRequest) {
       ? `SELECT o.id, o.user_id, o.client_id, o.client_name, o.client_email, o.client_phone,
            o.delivery_days, o.valid_days, o.total_net, o.total_gross, o.status, o.created_at,
            o.approval_status, o.follow_up_date, o.view_count, o.viewed_at, o.sent_at, o.accepted_at, o.public_token,
+           o.offer_number, o.revision, o.project_name, o.segment, o.offer_type, o.outcome, o.won_amount, o.contact_person, o.ekonom_order_no, o.lost_reason,
            u.name AS salesperson_name, u.market_region,
            COALESCE(om.total_cost, 0) AS total_cost, COALESCE(om.total_margin, 0) AS total_margin,
            COALESCE(om.margin_percent, 0) AS margin_percent`
       : `SELECT o.id, o.user_id, o.client_id, o.client_name, o.client_email, o.client_phone,
            o.delivery_days, o.valid_days, o.total_net, o.total_gross, o.status, o.created_at,
-           o.approval_status, o.follow_up_date, o.view_count, o.viewed_at, o.sent_at, o.accepted_at, o.public_token`;
+           o.approval_status, o.follow_up_date, o.view_count, o.viewed_at, o.sent_at, o.accepted_at, o.public_token,
+           o.offer_number, o.revision, o.project_name, o.segment, o.offer_type, o.outcome, o.won_amount, o.contact_person, o.ekonom_order_no, o.lost_reason`;
     const joins = user.canViewAll
       ? `FROM offers o LEFT JOIN users u ON o.user_id = u.id LEFT JOIN offer_margin_summary om ON o.id = om.offer_id`
       : `FROM offers o`;

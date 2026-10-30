@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     const [list, count, categories] = await Promise.all([
       db.query(
         `SELECT p.id, p.name, p.unit, p.sku, p.category, p.last_used,
+                p.manufacturer, p.ekonom_code, p.in_ekonom, p.min_price, p.stock_qty, p.supplier_bonus_percent,
                 pm.cost_price, pm.margin_percent, pm.min_margin_percent, pm.max_discount_percent,
                 CASE WHEN pm.cost_price > 0 THEN ROUND(pm.cost_price * (1 + pm.margin_percent / 100), 2) END AS base_price,
                 COALESCE(st.cnt, 0) AS usage_count, st.last_sale
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest) {
         ? row
         : {
             id: row.id, name: row.name, unit: row.unit, sku: row.sku, category: row.category, last_used: row.last_used,
+            manufacturer: row.manufacturer, ekonom_code: row.ekonom_code, in_ekonom: row.in_ekonom, stock_qty: row.stock_qty, min_price: row.min_price,
             base_price: row.base_price, usage_count: row.usage_count, last_sale: row.last_sale,
           }
     );

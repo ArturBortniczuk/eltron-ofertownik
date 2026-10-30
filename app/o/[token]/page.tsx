@@ -20,9 +20,17 @@ interface PublicOffer {
   created_at: string;
   salesperson_name?: string;
   salesperson_email?: string;
+  offer_number?: string;
+  revision?: number;
+  project_name?: string;
+  offer_type?: string;
+  contact_person?: string;
+  outcome?: string | null;
+  remarks?: Array<{ target: string; text: string }>;
 }
 interface PublicItem {
   product_name: string; quantity: number; unit: string; unit_price: number; vat_rate: number; net_amount: number; gross_amount: number;
+  availability?: string; availability_note?: string; item_note?: string;
 }
 
 export default function PublicOfferPage() {
@@ -101,8 +109,9 @@ export default function PublicOfferPage() {
         <div className="bg-eltron-primary text-white rounded-xl p-6 flex justify-between items-start gap-4">
           <div>
             <div className="text-sm opacity-80">GRUPA ELTRON</div>
-            <h1 className="text-2xl font-bold mt-1">Oferta handlowa nr {offer.id}</h1>
-            <div className="text-sm opacity-90 mt-2">Dla: {offer.client_name}</div>
+            <h1 className="text-2xl font-bold mt-1">Oferta handlowa nr {offer.offer_number || offer.id}{offer.revision ? `.${offer.revision}` : ''}</h1>
+            {offer.project_name && <div className="text-base font-medium mt-1">{offer.project_name}</div>}
+            <div className="text-sm opacity-90 mt-2">Dla: {offer.contact_person ? `${offer.contact_person}, ` : ''}{offer.client_name}</div>
           </div>
           <div className="text-right text-sm opacity-90">
             <div>Data: {formatDate(offer.created_at)}</div>
@@ -144,7 +153,16 @@ export default function PublicOfferPage() {
               {items.map((it, i) => (
                 <tr key={i} className="border-b border-gray-100">
                   <td className="py-2 pr-2 text-gray-500">{i + 1}</td>
-                  <td className="py-2 pr-2 font-medium text-gray-900">{it.product_name}</td>
+                  <td className="py-2 pr-2 font-medium text-gray-900">
+                    {it.product_name}
+                    {it.item_note && <div className="text-xs font-normal text-gray-500">{it.item_note}</div>}
+                    {it.availability === 'available' && <div className="text-xs font-normal text-green-700">Dostępny od ręki</div>}
+                    {(it.availability === 'partial' || it.availability === 'production') && (
+                      <div className="text-xs font-normal text-amber-700">
+                        {it.availability === 'partial' ? 'Częściowo od ręki' : 'Na zamówienie'}{it.availability_note ? ` – ${it.availability_note}` : ''}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2 pr-2 text-right whitespace-nowrap">{it.quantity} {it.unit}</td>
                   <td className="py-2 pr-2 text-right whitespace-nowrap">{formatCurrency(it.unit_price)}</td>
                   <td className="py-2 pr-2 text-right">{it.vat_rate}%</td>
@@ -173,6 +191,13 @@ export default function PublicOfferPage() {
             </div>
           </div>
         </div>
+
+        {offer.remarks && offer.remarks.length > 0 && (
+          <div className="card text-sm">
+            <div className="font-semibold text-gray-900 mb-1">Uwagi do oferty</div>
+            <ul className="list-disc list-inside text-gray-700 space-y-0.5">{offer.remarks.map((r, i) => <li key={i}>{r.text}</li>)}</ul>
+          </div>
+        )}
 
         {offer.notes && (
           <div className="card text-sm">

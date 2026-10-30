@@ -6,7 +6,7 @@ import { logActivity } from '../../../../lib/offers-db';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_LABELS: Record<string, string> = { draft: 'Szkic', sent: 'Wysłana', accepted: 'Zaakceptowana', rejected: 'Odrzucona' };
+const STATUS_LABELS: Record<string, string> = { draft: 'Szkic', sent: 'Wysłana', accepted: 'Wygrana', rejected: 'Przegrana' };
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,6 +55,9 @@ export async function POST(request: NextRequest) {
           `UPDATE offers SET status = $1::text, updated_at = CURRENT_TIMESTAMP,
              sent_at = CASE WHEN $1::text IN ('sent','accepted','rejected') AND sent_at IS NULL THEN CURRENT_TIMESTAMP ELSE sent_at END,
              accepted_at = CASE WHEN $1::text = 'accepted' THEN CURRENT_TIMESTAMP ELSE NULL END,
+             outcome = CASE WHEN $1::text = 'accepted' THEN 'won' WHEN $1::text = 'rejected' THEN 'lost' ELSE NULL END,
+             won_amount = CASE WHEN $1::text = 'accepted' THEN total_net ELSE NULL END,
+             closed_at = CASE WHEN $1::text IN ('accepted','rejected') THEN CURRENT_TIMESTAMP ELSE NULL END,
              follow_up_date = CASE WHEN $1::text = 'sent' AND follow_up_date IS NULL THEN CURRENT_DATE + 5
                                    WHEN $1::text IN ('accepted','rejected','draft') THEN NULL ELSE follow_up_date END
            WHERE id = $2`,

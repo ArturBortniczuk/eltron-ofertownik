@@ -2,6 +2,8 @@
 // Przeliczanie ofert po stronie serwera - ceny i sumy z przeglądarki nie są brane "na słowo".
 // Marża pozycji = (cena sprzedaży - koszt) / koszt * 100 (narzut na koszt), tak jak w PricingManager.
 
+import { amountTier } from './offer-rules';
+
 export const APPROVAL_RULES = {
   // Oferta o średniej marży poniżej tej wartości wymaga akceptacji zarządu
   minOfferMarginPercent: 10,
@@ -33,6 +35,13 @@ export interface CalcItem {
   margin_percent: number;
   discount_percent: number;
   original_price: number;
+  min_price: number;
+  below_min: boolean;
+  item_note: string;
+  availability: string;
+  availability_note: string;
+  in_ekonom: boolean;
+  manufacturer: string;
 }
 
 export interface OfferCalculation {
@@ -48,6 +57,7 @@ export interface OfferCalculation {
   itemsMarginPercent: number | null;
   needsApproval: boolean;
   approvalReasons: string[];
+  approvalLevel: string | null;
 }
 
 export function computeOffer(input: { items: any[]; additional_costs?: any }): OfferCalculation {
@@ -71,6 +81,13 @@ export function computeOffer(input: { items: any[]; additional_costs?: any }): O
       margin_percent: costPrice > 0 ? round2(((unitPrice - costPrice) / costPrice) * 100) : 0,
       discount_percent: Math.min(100, Math.max(0, num(raw.discount_percent))),
       original_price: num(raw.original_price) > 0 ? num(raw.original_price) : unitPrice,
+      min_price: Math.max(0, num(raw.min_price)),
+      below_min: num(raw.min_price) > 0 && unitPrice < num(raw.min_price),
+      item_note: String(raw.item_note || '').trim().slice(0, 500),
+      availability: ['available', 'partial', 'production', 'on_request'].includes(raw.availability) ? raw.availability : 'available',
+      availability_note: String(raw.availability_note || '').trim().slice(0, 300),
+      in_ekonom: raw.in_ekonom === false || raw.in_ekonom === 'false' ? false : true,
+      manufacturer: String(raw.manufacturer || '').trim().slice(0, 100),
     };
   });
 
@@ -99,6 +116,15 @@ export function computeOffer(input: { items: any[]; additional_costs?: any }): O
     approvalReasons.push(`${veryLow.length} poz. z marżą poniżej ${APPROVAL_RULES.minItemMarginPercent}%`);
   }
 
+  const belowMin = items.filter((i) => i.below_min);
+  if (belowMin.length > 0) {
+    approvalReasons.push(`${belowMin.length} poz. poniżej minimalnej ceny sprzedaży`);
+  }
+  const tier = amountTier(net);
+  if (tier) {
+    approvalReasons.push(`wartość netto ${Math.round(net).toLocaleString('pl-PL')} zł wymaga akceptacji: ${tier.label}`);
+  }
+
   return {
     items,
     totals: {
@@ -112,5 +138,6 @@ export function computeOffer(input: { items: any[]; additional_costs?: any }): O
     itemsMarginPercent,
     needsApproval: approvalReasons.length > 0,
     approvalReasons,
+    approvalLevel: tier ? tier.level : approvalReasons.length > 0 ? 'zarząd' : null,
   };
 }

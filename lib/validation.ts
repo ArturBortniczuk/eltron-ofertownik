@@ -48,6 +48,18 @@ export function validateCreateOffer(data: any): ValidationResult {
         errors.push('Nazwa klienta jest wymagana');
     }
 
+    if (!data.project_name || String(data.project_name).trim().length < 3) {
+        errors.push('Nazwa tematu / inwestycji jest wymagana (min. 3 znaki)');
+    }
+
+    if (!data.segment || !String(data.segment).trim()) {
+        errors.push('Wybierz segment oferty');
+    }
+
+    if (data.offer_type && !['zakup', 'przetarg'].includes(data.offer_type)) {
+        errors.push('Nieprawidłowy rodzaj oferty (zakup / przetarg)');
+    }
+
     if (typeof data.delivery_days !== 'number' || data.delivery_days < 0) {
         errors.push('Nieprawidłowy czas dostawy');
     }

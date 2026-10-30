@@ -11,6 +11,7 @@ async function loadByToken(token: string) {
   const r = await db.query(
     `SELECT o.id, o.user_id, o.client_name, o.delivery_days, o.valid_days, o.additional_costs, o.additional_costs_description,
             o.notes, o.total_net, o.total_vat, o.total_gross, o.status, o.created_at, o.sent_at,
+            o.offer_number, o.revision, o.project_name, o.offer_type, o.contact_person, o.remarks, o.outcome,
             u.name AS salesperson_name, u.email AS salesperson_email
      FROM offers o LEFT JOIN users u ON u.id = o.user_id
      WHERE o.public_token = $1`,
@@ -27,7 +28,8 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     }
 
     const items = await db.query(
-      `SELECT product_name, quantity, unit, unit_price, vat_rate, net_amount, gross_amount
+      `SELECT product_name, quantity, unit, unit_price, vat_rate, net_amount, gross_amount,
+              availability, availability_note, item_note
        FROM offer_items WHERE offer_id = $1 ORDER BY position_order`,
       [offer.id]
     );
@@ -42,8 +44,10 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
       [offer.id]
     );
 
-    const { user_id: _omit, ...publicOffer } = offer;
-    return NextResponse.json({ offer: publicOffer, items: items.rows });
+    const { user_id: _omit, remarks, ...publicOffer } = offer;
+    // Klient widzi tylko uwagi przeznaczone dla klienta (uwagi dla producenta i wewnętrzne zostają w firmie)
+    const clientRemarks = (Array.isArray(remarks) ? remarks : []).filter((r: any) => r.target === 'Klient');
+    return NextResponse.json({ offer: { ...publicOffer, remarks: clientRemarks }, items: items.rows });
   } catch (error) {
     console.error('Public offer error:', error);
     return NextResponse.json({ error: 'Błąd serwera' }, { status: 500 });
@@ -71,12 +75,12 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
 
     if (decision === 'accept') {
       await db.query(
-        `UPDATE offers SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP, follow_up_date = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        `UPDATE offers SET status = 'accepted', outcome = 'won', won_amount = total_net, closed_at = CURRENT_TIMESTAMP, accepted_at = CURRENT_TIMESTAMP, follow_up_date = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [offer.id]
       );
     } else {
       await db.query(
-        `UPDATE offers SET status = 'rejected', lost_reason = $2, follow_up_date = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        `UPDATE offers SET status = 'rejected', outcome = 'lost', closed_at = CURRENT_TIMESTAMP, lost_reason = $2, follow_up_date = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [offer.id, reason || 'Odrzucona przez klienta online']
       );
     }

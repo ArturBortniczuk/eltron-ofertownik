@@ -6,7 +6,9 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { formatCurrency, formatCurrencyShort, daysBetween, STATUS_META } from '../../../lib/format';
 import { canAccessAllData } from '../../../lib/client-auth-utils';
-import { ApprovalBadge } from '../../components/StatusBadge';
+import { ApprovalBadge, TypeBadge } from '../../components/StatusBadge';
+import CloseOfferModal, { CloseTarget } from '../../components/CloseOfferModal';
+import { offerLabel } from '../../../lib/offer-rules';
 
 interface PipelineOffer {
   id: number;
@@ -22,14 +24,20 @@ interface PipelineOffer {
   view_count?: number;
   salesperson_name?: string;
   margin_percent?: number;
+  offer_number?: string;
+  revision?: number;
+  project_name?: string;
+  offer_type?: string;
+  outcome?: string | null;
+  total_net?: number;
 }
 
 const COLUMNS = ['draft', 'sent', 'accepted', 'rejected'] as const;
 const HINTS: Record<string, string> = {
   draft: 'Przeciągnij tu, aby wrócić do szkicu',
   sent: 'Przeciągnij tu, aby oznaczyć jako wysłaną',
-  accepted: 'Przeciągnij tu, gdy klient zaakceptuje',
-  rejected: 'Przeciągnij tu, gdy klient odrzuci',
+  accepted: 'Przeciągnij tu, gdy oferta wygrana (lub częściowo)',
+  rejected: 'Przeciągnij tu, gdy oferta przegrana',
 };
 
 export default function PipelinePage() {
@@ -44,6 +52,7 @@ export default function PipelinePage() {
   const [overCol, setOverCol] = useState<string | null>(null);
   const [salesperson, setSalesperson] = useState('');
   const [showOld, setShowOld] = useState(false);
+  const [closing, setClosing] = useState<{ target: CloseTarget; initial: 'won' | 'lost' } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -81,12 +90,16 @@ export default function PipelinePage() {
     if (!offer || offer.status === status) return;
     setError('');
 
-    let lostReason: string | undefined;
-    if (status === 'rejected') {
-      const r = window.prompt('Dlaczego klient odrzucił ofertę? (opcjonalnie)', '');
-      if (r === null) return;
-      lostReason = r;
+    // Wygrana / przegrana wymaga rozliczenia (wygrana, częściowo, przegrana + powód)
+    if (status === 'accepted' || status === 'rejected') {
+      if (offer.status === 'draft') { setError('Szkic nie był wysłany – najpierw oznacz ofertę jako wysłaną'); return; }
+      setClosing({
+        target: { id: offer.id, label: offerLabel(offer), client_name: offer.client_name, total_net: Number(offer.total_net) || 0 },
+        initial: status === 'accepted' ? 'won' : 'lost',
+      });
+      return;
     }
+    const lostReason: string | undefined = undefined;
 
     const previous = offers;
     setOffers((list) => list.map((o) => (o.id === id ? { ...o, status } : o)));
@@ -188,13 +201,16 @@ export default function PipelinePage() {
                       >
                         <div className="flex justify-between items-start gap-2">
                           <Link href={`/dashboard/offers/${o.id}`} className="font-medium text-gray-900 hover:text-eltron-primary leading-snug">
-                            {o.client_name}
+                            {o.project_name || o.client_name}
                           </Link>
-                          <span className="text-xs text-gray-400 shrink-0">#{o.id}</span>
+                          <span className="text-xs text-gray-400 shrink-0">{offerLabel(o)}</span>
                         </div>
+                        {o.project_name && <div className="text-xs text-gray-500">{o.client_name}</div>}
                         <div className="mt-1 font-semibold text-eltron-primary">{formatCurrency(o.total_gross)}</div>
                         <div className="flex flex-wrap gap-1 mt-2">
                           <ApprovalBadge status={o.approval_status} />
+                          <TypeBadge type={o.offer_type} />
+                          {o.outcome === 'partial' && <span className="px-2 py-0.5 text-xs rounded-full bg-lime-100 text-lime-800">częściowo</span>}
                           {overdue && <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">📞 czas na kontakt</span>}
                           {o.status === 'sent' && !!o.view_count && (
                             <span className="px-2 py-0.5 text-xs rounded-full bg-sky-100 text-sky-700">👀 oglądana {o.view_count}x</span>
@@ -214,6 +230,9 @@ export default function PipelinePage() {
             );
           })}
         </div>
+      )}
+      {closing && (
+        <CloseOfferModal offer={closing.target} initial={closing.initial} onClose={() => setClosing(null)} onDone={() => { setClosing(null); load(); }} />
       )}
     </div>
   );

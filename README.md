@@ -28,6 +28,30 @@ Gdy coś zwraca błędy 500, otwórz `/api/health` – pokaże połączenie z ba
 | Centrum Elektryczne | podgląd całej firmy i marż, import cennika; nie akceptuje marż |
 | Budowy | jak handlowiec |
 
+## Nowości z listy życzeń dyrektorów
+
+| Życzenie | Jak działa w demo |
+|---|---|
+| Baza zgodna z Ekonomem | Produkty mają kod Ekonoma, producenta, stan i cenę minimalną; towary „poza Ekonomem” są oznaczone. **Integracja jest symulowana** (kartoteka demo). |
+| Pozycje poza Ekonomem | W kreatorze oferty nieznany towar można dodać jako jednorazowy – nie trafi do kartoteki. |
+| Wygrana oferta → zamówienie w Ekonomie | Przycisk na wygranej ofercie tworzy numer zamówienia (ZO/rok/nr) i plik XML do pobrania (przy wygranej częściowo – tylko zamówiona część). |
+| Podpowiadanie ceny | Chipy pod pozycją: ostatnia cena klienta, cena kolegi, średnie z innych rynków, średnia wygranych / przegranych, cena katalogowa. |
+| Temat/inwestycja i segment | Wymagane przy zapisie; ostrzeżenie, gdy podobny temat już istnieje; segment dobierany z pozycji. |
+| Uwagi indywidualne | Uwagi do klienta / producenta / wewnętrzne / własny adresat; uwaga do każdej pozycji obok nazwy towaru. |
+| Wczytywanie zapytań | Ekran *Wczytaj zapytanie*: wklejony e-mail i pliki .txt/.csv/.eml są parsowane naprawdę; **PDF/skan/Excel – odczyt (OCR) jest symulowany** przykładowymi danymi. |
+| Panel zarządczy | Zarząd i Centrum Elektryczne: filtry (temat, segment, producent, towar, handlowiec, rynek, klient), koszty i marża **po bonusie dostawców**, analiza sprzedaży utraconej, eksport CSV/JSON i „Wyślij do Process App” (symulacja). |
+| Cena minimalna | Pozycja poniżej minimum jest czerwona i kieruje ofertę do akceptacji. |
+| Statusy i wymuszone rozliczanie | Oferta wysłana musi zostać rozliczona jako wygrana / wygrana częściowo / przegrana (z powodem i konkurencją). Po terminie ważności +7 dni oferta „wisi”; przy 5 takich ofertach nowe oferty są blokowane (zarząd bez limitu). |
+| Negocjacje | Przycisk *Wariant (negocjacje)* tworzy OF/2026/0042.1, .2 … z historią zmian ceny. |
+| Unikalne numery ofert | OF/rok/0001 – nadawane automatycznie. |
+| Cross-selling | Do kabla podpowiada mufy, głowice, rury, bednarkę itd. (reguły + historia „kupowane razem”). |
+| Akceptacja / DW | Progi kwotowe (≥ 50 tys. zł – dyrektor, ≥ 150 tys. zł – zarząd), pole DW przy wysyłce oferty. W demo akceptuje rola Zarząd. |
+| Zakup czy przetarg | Rodzaj oferty z terminem składania; filtry i znaczniki na listach. |
+| Zapytanie do producenta | Z oferty: zestawienie pozycji danego producenta → (symulowana) odpowiedź z cenami → „Zastosuj ceny zakupu”. |
+
+> Po aktualizacji aplikacji na istniejącej bazie kliknij *Zespół → reset danych demo* (rola Zarząd), żeby wgrać nowe dane
+> (numery ofert, producenci, ceny minimalne, warianty negocjacyjne). Kolumny i tabele dodają się same, ale dane demo – dopiero po resecie.
+
 ## Funkcje
 
 - **Lejek ofert** – tablica kanban, przeciąganie kart zmienia status (z powodem odrzucenia).
@@ -47,6 +71,15 @@ Gdy coś zwraca błędy 500, otwórz `/api/health` – pokaże połączenie z ba
 - **Wyszukiwarka globalna** – `Ctrl+K`.
 - **Eksport CSV** – oferty, klienci, produkty (otwiera się w Excelu).
 
+## Dodatkowy scenariusz: zapytanie → oferta → negocjacje → Ekonom
+
+1. Jako **Anna** otwórz *Wczytaj zapytanie* → „E-mail od inwestora” → system rozpozna klienta, temat, pozycje i dostępność.
+2. *Utwórz ofertę z zapytania* → sprawdź podpowiedzi cen, dopisz towary z ramki „Warto dodać” → obniż cenę poniżej minimum (zrobi się czerwona).
+3. Jako **Katarzyna (zarząd)** zaakceptuj ofertę → jako Anna wyślij ją z kopią DW → *Wariant (negocjacje)* i obniż cenę.
+4. *Rozlicz ofertę* → wygrana częściowo → *Utwórz zamówienie w Ekonomie* (pobierz XML).
+5. Przełącz na **Piotra Kowalskiego**: ma przeterminowane oferty bez wyniku – nowa oferta jest zablokowana, dopóki ich nie rozliczy.
+6. Jako zarząd wejdź w *Panel zarządczy*: filtry, sprzedaż utracona, marża po bonusie, eksport do Process App.
+
 ## Proponowany scenariusz pokazu (10 minut)
 
 1. Wejdź jako **Anna Nowak (handlowiec)** → pulpit, cel miesięczny, zadania na dziś.
@@ -62,3 +95,5 @@ Gdy coś zwraca błędy 500, otwórz `/api/health` – pokaże połączenie z ba
 - Rejestracja i zwykłe logowanie hasłem zostały w kodzie, ale nie są używane. Nie wyłączaj `DEMO_MODE` bez wcześniejszego
   ograniczenia wyboru roli przy rejestracji (obecnie każdy z domeną @eltron.pl może wybrać rolę „zarząd”).
 - Maile nie są wysyłane, PDF to wersja HTML do druku.
+- Ekonom, Process App, e-maile do producentów i OCR plików PDF/Excel są symulowane (brak zewnętrznych połączeń).
+- Bonusy dostawców, ceny minimalne i stany magazynowe to dane demo z `lib/demo-seed.ts`.

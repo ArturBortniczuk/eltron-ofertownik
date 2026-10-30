@@ -55,6 +55,7 @@ export async function GET(
         net_amount::numeric as net_amount,
         vat_amount::numeric as vat_amount,
         gross_amount::numeric as gross_amount,
+        availability, availability_note, item_note,
         position_order
       FROM offer_items
       WHERE offer_id = $1
@@ -158,7 +159,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
     return pageItems.map((item, index) => `
       <tr>
         <td class="center-align">${startIndex + index + 1}</td>
-        <td class="product-name">${safeString(item.product_name)}</td>
+        <td class="product-name">${safeString(item.product_name)}${item.item_note ? `<div style="font-size:10px;color:#555;font-weight:normal">${safeString(item.item_note)}</div>` : ''}${item.availability && item.availability !== 'available' && item.availability !== 'on_request' ? `<div style="font-size:10px;color:#b45309;font-weight:normal">Dostępność: ${item.availability === 'partial' ? 'częściowo od ręki' : 'na zamówienie'}${item.availability_note ? ' – ' + safeString(item.availability_note) : ''}</div>` : ''}</td>
         <td class="center-align">${formatNumber(item.quantity)}</td>
         <td class="center-align">${safeString(item.unit)}</td>
         <td class="right-align">${formatCurrency(item.unit_price)}</td>
@@ -210,7 +211,9 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             </div>
             
             <div class="offer-info">
-              <div class="offer-number">OFERTA NR ${offer.id}</div>
+              <div class="offer-number">OFERTA NR ${safeString(offer.offer_number || String(offer.id))}${offer.revision > 0 ? '.' + offer.revision : ''}</div>
+              ${offer.project_name ? `<strong>Temat:</strong> ${safeString(offer.project_name)}<br>` : ''}
+              ${offer.contact_person ? `<strong>Dla:</strong> ${safeString(offer.contact_person)}<br>` : ''}
               <strong>Data:</strong> ${formatDate(offer.created_at)}<br>
               <strong>Ważna do:</strong> ${validUntil}<br>
               <strong>Termin dostawy:</strong> ${offer.delivery_days || 14} dni
@@ -287,6 +290,13 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
             </div>
           </div>
 
+          ${Array.isArray(offer.remarks) && offer.remarks.filter((r: any) => r.target === 'Klient').length ? `
+          <div class="notes">
+            <h3>📌 Uwagi:</h3>
+            <div class="notes-content">${offer.remarks.filter((r: any) => r.target === 'Klient').map((r: any) => '• ' + safeString(r.text)).join('<br>')}</div>
+          </div>
+          ` : ''}
+
           ${offer.notes ? `
           <div class="notes">
             <h3>💬 Uwagi dodatkowe:</h3>
@@ -303,7 +313,7 @@ function generateProfessionalOfferHTML(offer: any, items: any[]): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oferta ${offer.id} - ${safeString(offer.client_name)}</title>
+    <title>Oferta ${safeString(offer.offer_number || String(offer.id))} - ${safeString(offer.client_name)}</title>
     <style>
         @page {
             size: A4;

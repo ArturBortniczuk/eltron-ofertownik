@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { StatusBadge, ApprovalBadge } from '../../../components/StatusBadge';
+import { StatusBadge, ApprovalBadge, TypeBadge } from '../../../components/StatusBadge';
+import CloseOfferModal from '../../../components/CloseOfferModal';
+import { AVAILABILITY, OUTCOMES, CC_SUGGESTIONS, amountTier, offerLabel } from '../../../../lib/offer-rules';
 import { formatCurrency, formatDate, formatDateTime, marginBadge, timeAgo } from '../../../../lib/format';
 
 interface OfferItem {
@@ -20,6 +22,23 @@ interface OfferItem {
   cost_price: number;
   margin_percent: number;
   discount_percent: number;
+  availability?: string;
+  availability_note?: string;
+  item_note?: string;
+  min_price?: number | null;
+  in_ekonom?: boolean;
+  manufacturer?: string | null;
+}
+
+interface Version {
+  id: number; revision: number; total_net: number; total_gross: number; status: string; outcome?: string | null;
+  is_current: boolean; created_at: string; margin_percent?: number;
+}
+
+interface Rfq {
+  id: number; manufacturer: string; message: string; status: string; created_at: string;
+  items: Array<{ id: number; product_name: string; quantity: number; unit: string }>;
+  response?: Array<{ item_id: number; product_name: string; old_cost: number; quoted_cost: number | null; lead_days: number }> | null;
 }
 
 interface OfferDetails {
@@ -50,12 +69,29 @@ interface OfferDetails {
     view_count?: number;
     viewed_at?: string;
     public_token?: string;
+    offer_number?: string;
+    revision?: number;
+    project_name?: string;
+    segment?: string;
+    offer_type?: string;
+    tender_deadline?: string | null;
+    contact_person?: string;
+    remarks?: Array<{ target: string; text: string }>;
+    outcome?: string | null;
+    won_amount?: number | null;
+    competitor?: string | null;
+    ekonom_order_no?: string | null;
+    ekonom_exported_at?: string | null;
+    approval_level?: string | null;
+    cc_emails?: string | null;
   };
+  versions: Version[];
+  rfqs: Rfq[];
   items: OfferItem[];
   activity: Array<{ id: number; actor_name?: string; type: string; message: string; created_at: string }>;
   tasks: Array<{ id: number; title: string; due_date: string; done: boolean }>;
   margin: { net: number; cost: number; margin: number; marginPercent: number; itemsMarginPercent: number | null } | null;
-  permissions: { canEdit: boolean; canDelete: boolean; canApprove: boolean; canSeeMargins: boolean; isOwner: boolean };
+  permissions: { canEdit: boolean; canDelete: boolean; canApprove: boolean; canSeeMargins: boolean; isOwner: boolean; canExport?: boolean };
 }
 
 const PDFDownloadButtonPrimary = dynamic(
@@ -64,7 +100,7 @@ const PDFDownloadButtonPrimary = dynamic(
 );
 
 const ACTIVITY_ICON: Record<string, string> = {
-  created: '🆕', status: '🔄', comment: '💬', email: '✉️', approval: '🛡️', viewed: '👀', client_response: '🤝', edited: '✏️',
+  created: '🆕', status: '🔄', comment: '💬', email: '✉️', approval: '🛡️', viewed: '👀', client_response: '🤝', edited: '✏️', ekonom: '🔗', rfq: '🏭',
 };
 
 export default function OfferDetailPage() {
@@ -86,6 +122,9 @@ export default function OfferDetailPage() {
   const [followUp, setFollowUp] = useState('');
   const [followTask, setFollowTask] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showClose, setShowClose] = useState(false);
+  const [emailCc, setEmailCc] = useState('');
+  const [rfqMaker, setRfqMaker] = useState('');
 
   const fetchOffer = useCallback(async () => {
     try {
@@ -146,12 +185,35 @@ export default function OfferDetailPage() {
   };
 
   const updateStatus = (status: string) => {
-    if (status === 'rejected') {
-      const reason = window.prompt('Dlaczego oferta została odrzucona? (opcjonalnie)', '');
-      if (reason === null) return;
-      return put({ action: 'status', status, lost_reason: reason });
-    }
     return put({ action: 'status', status });
+  };
+
+  const newVariant = async () => {
+    setBusy(true);
+    const r = await post({ action: 'variant' });
+    setBusy(false);
+    if (r.ok) router.push(`/dashboard/offers/new?edit=${r.body.offerId}`);
+    else setError(r.body.error || 'Nie udało się utworzyć wariantu');
+  };
+
+  const sendToEkonom = async () => {
+    setBusy(true);
+    setError('');
+    const res = await fetch(`/api/offers/${offerId}/ekonom`, { method: 'POST' });
+    const d = await res.json();
+    setBusy(false);
+    if (res.ok) { setInfo(`Utworzono zamówienie ${d.orderNo} w Ekonomie (symulacja integracji).`); fetchOffer(); }
+    else setError(d.error || 'Nie udało się utworzyć zamówienia w Ekonomie');
+  };
+
+  const rfqAction = async (body: Record<string, unknown>, success: string) => {
+    setBusy(true);
+    setError('');
+    const res = await fetch(`/api/offers/${offerId}/rfq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await res.json();
+    setBusy(false);
+    if (res.ok) { setInfo(success); fetchOffer(); }
+    else setError(d.error || 'Operacja nie powiodła się');
   };
 
   const deleteOffer = async () => {
@@ -200,23 +262,31 @@ export default function OfferDetailPage() {
   const expired = validUntil < new Date() && offer.status === 'sent';
   const blocked = offer.approval_status === 'pending' || offer.approval_status === 'rejected';
   const showMargins = permissions.canSeeMargins;
+  const label = offerLabel(offer);
+  const isOpen = offer.status === 'sent';
+  const tier = amountTier(Number(offer.total_net));
+  const makers = Array.from(new Set(items.map((i) => i.manufacturer).filter(Boolean))) as string[];
+  const offEkonom = items.filter((i) => i.in_ekonom === false).length;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <h1 className="text-3xl font-bold text-gray-900">Oferta #{offer.id}</h1>
-            <StatusBadge status={offer.status} large />
+            <h1 className="text-3xl font-bold text-gray-900">Oferta {label}</h1>
+            <StatusBadge status={offer.status} outcome={offer.outcome} large />
+            <TypeBadge type={offer.offer_type} />
             <ApprovalBadge status={offer.approval_status} />
             {expired && <span className="px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800">Termin ważności minął</span>}
           </div>
-          <p className="text-gray-600">Utworzona {formatDate(offer.created_at)} przez {offer.created_by_name}</p>
+          {offer.project_name && <p className="text-lg text-gray-800 font-medium">{offer.project_name}</p>}
+          <p className="text-gray-600">Utworzona {formatDate(offer.created_at)} przez {offer.created_by_name}{offer.segment ? ` · segment: ${offer.segment}` : ''}</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <PDFDownloadButtonPrimary offer={offer as any} items={items as any} />
           <button onClick={() => setShowEmail(true)} disabled={blocked} title={blocked ? 'Najpierw akceptacja marży' : ''} className="btn-secondary disabled:opacity-50">✉️ Wyślij e-mailem</button>
+          {permissions.canEdit && offer.status !== 'draft' && <button onClick={newVariant} disabled={busy} className="btn-secondary" title="Nowa wersja oferty do negocjacji (ten sam numer + kolejna rewizja)">🔁 Wariant (negocjacje)</button>}
           <button onClick={duplicate} disabled={busy} className="btn-secondary">📄 Kopiuj</button>
           <button onClick={saveTemplate} className="btn-secondary">💾 Jako szablon</button>
           {permissions.canEdit && <Link href={`/dashboard/offers/new?edit=${offer.id}`} className="btn-secondary">✏️ Edytuj</Link>}
@@ -234,7 +304,8 @@ export default function OfferDetailPage() {
           <p className="text-sm text-amber-800 mt-1">
             {permissions.isOwner
               ? 'Do czasu decyzji nie możesz jej wysłać do klienta. Zarząd dostał powiadomienie.'
-              : 'Marża jest poniżej ustalonego progu.'}
+              : 'Oferta narusza ustalone progi (marża, cena minimalna lub wartość).'}
+            {tier ? ` Wymagany poziom akceptacji dla tej kwoty: ${tier.label}.` : ''}
           </p>
           {permissions.canApprove && (
             <div className="mt-3 flex flex-col md:flex-row gap-3">
@@ -254,20 +325,34 @@ export default function OfferDetailPage() {
         </div>
       )}
 
-      {/* Przyciski statusu */}
+      {/* Status i rozliczenie */}
       {permissions.canEdit && (
         <div className="card flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="text-sm text-gray-600">Status oferty</div>
+          <div className="text-sm text-gray-600">
+            Status oferty
+            {isOpen && <div className="text-xs text-gray-500">Każdą wysłaną ofertę trzeba na końcu rozliczyć: wygrana, wygrana częściowo lub przegrana.</div>}
+          </div>
           <div className="flex flex-wrap gap-2">
             {offer.status !== 'draft' && <button disabled={busy} onClick={() => updateStatus('draft')} className="btn-secondary text-sm">↩ Wróć do szkicu</button>}
-            {offer.status !== 'sent' && <button disabled={busy || blocked} onClick={() => updateStatus('sent')} className="btn-secondary text-sm disabled:opacity-50">📤 Oznacz jako wysłaną</button>}
-            {offer.status !== 'accepted' && <button disabled={busy || offer.status === 'draft'} onClick={() => updateStatus('accepted')} className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-4 rounded-lg disabled:opacity-40">✅ Zaakceptowana</button>}
-            {offer.status !== 'rejected' && <button disabled={busy || offer.status === 'draft'} onClick={() => updateStatus('rejected')} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded-lg disabled:opacity-40">❌ Odrzucona</button>}
+            {offer.status !== 'sent' && <button disabled={busy || blocked} onClick={() => updateStatus('sent')} className="btn-secondary text-sm disabled:opacity-50">📤 {offer.status === 'draft' ? 'Oznacz jako wysłaną' : 'Otwórz ponownie'}</button>}
+            {offer.status !== 'draft' && (
+              <button disabled={busy} onClick={() => setShowClose(true)} className="bg-eltron-primary hover:opacity-90 text-white text-sm font-medium py-2 px-4 rounded-lg disabled:opacity-40">
+                🏁 {isOpen ? 'Rozlicz ofertę' : 'Zmień wynik'}
+              </button>
+            )}
           </div>
         </div>
       )}
-      {offer.status === 'rejected' && offer.lost_reason && (
-        <div className="text-sm text-gray-700 bg-gray-100 rounded-lg px-4 py-2">Powód odrzucenia: <strong>{offer.lost_reason}</strong></div>
+      {offer.outcome === 'partial' && offer.won_amount != null && (
+        <div className="text-sm text-lime-900 bg-lime-50 border border-lime-200 rounded-lg px-4 py-2">
+          🟡 Wygrana częściowo: zamówiono <strong>{formatCurrency(offer.won_amount)}</strong> netto z {formatCurrency(offer.total_net)} ({Math.round((offer.won_amount / Math.max(1, offer.total_net)) * 100)}%).
+        </div>
+      )}
+      {offer.competitor && (
+        <div className="text-sm text-gray-700 bg-gray-100 rounded-lg px-4 py-2">Konkurencja: <strong>{offer.competitor}</strong></div>
+      )}
+      {(offer.status === 'rejected' || offer.outcome === 'partial') && offer.lost_reason && (
+        <div className="text-sm text-gray-700 bg-gray-100 rounded-lg px-4 py-2">Powód przegranej: <strong>{offer.lost_reason}</strong></div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -287,6 +372,8 @@ export default function OfferDetailPage() {
               {offer.client_phone && (
                 <div><div className="text-gray-600 mb-1">Telefon</div><a href={`tel:${offer.client_phone}`} className="font-medium text-eltron-primary hover:underline">{offer.client_phone}</a></div>
               )}
+              {offer.contact_person && <div><div className="text-gray-600 mb-1">Oferta dla</div><div className="font-medium">👤 {offer.contact_person}</div></div>}
+              {offer.offer_type === 'przetarg' && <div><div className="text-gray-600 mb-1">Termin składania</div><div className="font-medium">{offer.tender_deadline ? formatDate(offer.tender_deadline) : 'nie podano'}</div></div>}
               <div><div className="text-gray-600 mb-1">Dostawa</div><div className="font-medium">{offer.delivery_days} dni</div></div>
               <div><div className="text-gray-600 mb-1">Ważna do</div><div className={`font-medium ${expired ? 'text-red-600' : ''}`}>{formatDate(validUntil)}</div></div>
               <div><div className="text-gray-600 mb-1">Wartość brutto</div><div className="font-bold text-eltron-primary">{formatCurrency(offer.total_gross)}</div></div>
@@ -312,9 +399,23 @@ export default function OfferDetailPage() {
                   {items.map((item, index) => (
                     <tr key={item.id} className="table-row">
                       <td className="py-3 px-2 text-gray-600">{index + 1}</td>
-                      <td className="py-3 px-2 font-medium text-gray-900">{item.product_name}</td>
+                      <td className="py-3 px-2 font-medium text-gray-900">
+                        {item.product_name}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {item.availability && (
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-normal ${AVAILABILITY[item.availability]?.badge || ''}`}>
+                              {AVAILABILITY[item.availability]?.label}{item.availability_note ? ` – ${item.availability_note}` : ''}
+                            </span>
+                          )}
+                          {item.in_ekonom === false && <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-normal">poza Ekonomem</span>}
+                          {showMargins && item.min_price != null && item.min_price > 0 && item.unit_price < item.min_price && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-600 text-white font-normal">poniżej ceny min. {formatCurrency(item.min_price)}</span>
+                          )}
+                        </div>
+                        {item.item_note && <div className="text-xs font-normal text-gray-500 mt-1">📝 {item.item_note}</div>}
+                      </td>
                       <td className="py-3 px-2 whitespace-nowrap">{item.quantity} {item.unit}</td>
-                      <td className="py-3 px-2 text-right whitespace-nowrap">{formatCurrency(item.unit_price)}</td>
+                      <td className={`py-3 px-2 text-right whitespace-nowrap ${showMargins && item.min_price != null && item.min_price > 0 && item.unit_price < item.min_price ? 'text-red-600 font-semibold' : ''}`}>{formatCurrency(item.unit_price)}</td>
                       {showMargins && (
                         <>
                           <td className="py-3 px-2 text-right text-gray-600 whitespace-nowrap">{item.cost_price ? formatCurrency(item.cost_price) : '-'}</td>
@@ -368,6 +469,20 @@ export default function OfferDetailPage() {
             </div>
           </div>
 
+          {Array.isArray(offer.remarks) && offer.remarks.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Uwagi dodatkowe</h2>
+              <ul className="space-y-1.5 text-sm">
+                {offer.remarks.map((r, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs h-fit whitespace-nowrap">{r.target}</span>
+                    <span className="text-gray-800">{r.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {offer.notes && (
             <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Uwagi</h2>
@@ -377,6 +492,99 @@ export default function OfferDetailPage() {
         </div>
 
         <div className="space-y-6">
+          {data.versions.length > 1 && (
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">🔁 Negocjacje</h2>
+              <p className="text-xs text-gray-500 mb-3">Kolejne warianty oferty – widać, jak zmieniała się cena.</p>
+              <ol className="space-y-2">
+                {data.versions.map((v, i) => {
+                  const prev = i > 0 ? data.versions[i - 1] : null;
+                  const delta = prev ? ((v.total_net - prev.total_net) / Math.max(1, prev.total_net)) * 100 : null;
+                  const max = Math.max(...data.versions.map((x) => x.total_net));
+                  return (
+                    <li key={v.id}>
+                      <Link href={`/dashboard/offers/${v.id}`} className={`block rounded-lg border p-2 hover:border-eltron-primary ${v.id === offer.id ? 'border-eltron-primary bg-eltron-primary/5' : 'border-gray-200'}`}>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="font-medium">{v.revision === 0 ? 'Oferta pierwotna' : `Wariant ${offer.offer_number}.${v.revision}`}{v.is_current ? ' · aktualny' : ''}</span>
+                          <span className="font-semibold">{formatCurrency(v.total_net)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded mt-1.5 overflow-hidden"><div className="h-full bg-eltron-primary rounded" style={{ width: `${(v.total_net / max) * 100}%` }} /></div>
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>{formatDate(v.created_at)}</span>
+                          {delta !== null && <span className={delta < 0 ? 'text-red-600' : 'text-green-700'}>{delta > 0 ? '+' : ''}{delta.toFixed(1)}% vs poprzednia</span>}
+                          {showMargins && v.margin_percent != null && <span>marża {Number(v.margin_percent).toFixed(1)}%</span>}
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
+
+          {offer.status === 'accepted' && permissions.canExport && (
+            <div className="card border-indigo-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">🔗 Ekonom</h2>
+              {offer.ekonom_order_no ? (
+                <>
+                  <p className="text-sm text-gray-700">Zamówienie w Ekonomie: <strong>{offer.ekonom_order_no}</strong></p>
+                  <p className="text-xs text-gray-500">Przekazano {formatDateTime(offer.ekonom_exported_at)}</p>
+                  <a href={`/api/offers/${offer.id}/ekonom`} className="btn-secondary text-sm w-full text-center mt-3 block">⬇ Pobierz plik zamówienia (XML)</a>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-600 mb-2">Oferta wygrana – jednym kliknięciem wpada do Ekonoma jako zamówienie odbiorcy{offer.outcome === 'partial' ? ' (tylko zamówiona część)' : ''}.</p>
+                  {offEkonom > 0 && <p className="text-xs text-sky-800 bg-sky-50 rounded p-2 mb-2">{offEkonom} poz. spoza kartoteki Ekonoma zostanie przekazane jako nieskatalogowe.</p>}
+                  <button disabled={busy} onClick={sendToEkonom} className="btn-primary w-full text-sm disabled:opacity-50">Utwórz zamówienie w Ekonomie</button>
+                  <p className="text-[11px] text-gray-400 mt-2">Demo: integracja jest symulowana – powstaje numer zamówienia i plik XML.</p>
+                </>
+              )}
+            </div>
+          )}
+
+          {offer.status !== 'draft' && permissions.canEdit && makers.length > 0 && (
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">🏭 Zapytania do producentów</h2>
+              <p className="text-xs text-gray-500 mb-3">Wyślij zestawienie pozycji danego producenta z prośbą o wycenę.</p>
+              <div className="flex gap-2 mb-3">
+                <select value={rfqMaker || makers[0]} onChange={(e) => setRfqMaker(e.target.value)} className="input-field text-sm">
+                  {makers.map((m) => <option key={m}>{m}</option>)}
+                </select>
+                <button disabled={busy} onClick={() => rfqAction({ action: 'create', manufacturer: rfqMaker || makers[0] }, `Wysłano zapytanie do ${rfqMaker || makers[0]} (symulacja)`)} className="btn-secondary text-sm whitespace-nowrap disabled:opacity-50">Wyślij</button>
+              </div>
+              <ul className="space-y-3">
+                {data.rfqs.map((q) => (
+                  <li key={q.id} className="border border-gray-200 rounded-lg p-3 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{q.manufacturer}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${q.status === 'sent' ? 'bg-blue-100 text-blue-800' : q.status === 'answered' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
+                        {q.status === 'sent' ? 'czeka na odpowiedź' : q.status === 'answered' ? 'jest wycena' : 'zastosowano'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500">{q.items.length} poz. · {formatDate(q.created_at)}</div>
+                    {q.response && (
+                      <table className="w-full text-xs mt-2">
+                        <tbody>
+                          {q.response.map((l) => (
+                            <tr key={l.item_id} className="border-t border-gray-100">
+                              <td className="py-1 pr-2">{l.product_name}</td>
+                              <td className="py-1 text-right whitespace-nowrap">{l.quoted_cost ? `${formatCurrency(l.quoted_cost)}` : '-'}{l.old_cost && l.quoted_cost ? <span className={l.quoted_cost <= l.old_cost ? 'text-green-700' : 'text-red-600'}> ({(((l.quoted_cost - l.old_cost) / l.old_cost) * 100).toFixed(1)}%)</span> : null}</td>
+                              <td className="py-1 pl-2 text-right text-gray-500">{l.lead_days} dni</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      {q.status === 'sent' && <button disabled={busy} onClick={() => rfqAction({ action: 'simulate_response', rfq_id: q.id }, 'Producent odesłał wycenę (symulacja)')} className="btn-secondary text-xs">Symuluj odpowiedź</button>}
+                      {q.status === 'answered' && showMargins && <button disabled={busy} onClick={() => rfqAction({ action: 'apply', rfq_id: q.id }, 'Zastosowano ceny zakupu – przeliczono marże')} className="btn-primary text-xs">Zastosuj ceny zakupu</button>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {offer.status !== 'draft' && offer.public_token && (
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-2">Link dla klienta</h2>
@@ -437,6 +645,14 @@ export default function OfferDetailPage() {
         <Link href="/dashboard/offers" className="btn-secondary">← Powrót do listy ofert</Link>
       </div>
 
+      {showClose && (
+        <CloseOfferModal
+          offer={{ id: offer.id, label, client_name: offer.client_name, total_net: Number(offer.total_net) }}
+          onClose={() => setShowClose(false)}
+          onDone={() => { setShowClose(false); fetchOffer(); }}
+        />
+      )}
+
       {showEmail && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setShowEmail(false)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
@@ -444,17 +660,25 @@ export default function OfferDetailPage() {
             <p className="text-xs text-gray-500 mb-4">Wersja demo: wiadomość nie jest faktycznie wysyłana, ale oferta zmienia status na „Wysłana”, a akcja trafia do historii.</p>
             <label className="block text-sm text-gray-700 mb-1">Do</label>
             <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} className="input-field mb-3" />
+            <label className="block text-sm text-gray-700 mb-1">DW (np. dyrektor, logistyka – po przecinku)</label>
+            <input value={emailCc || offer.cc_emails || ''} onChange={(e) => setEmailCc(e.target.value)} className="input-field mb-1" placeholder="dyrektor.handlowy@eltron.pl" />
+            <div className="flex flex-wrap gap-1 mb-3">
+              {CC_SUGGESTIONS.map((c) => (
+                <button key={c.email} type="button" onClick={() => setEmailCc((cur) => { const base = cur || offer.cc_emails || ''; return base.includes(c.email) ? base : base ? `${base}, ${c.email}` : c.email; })}
+                  className="text-xs px-2 py-0.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700">+ {c.label}</button>
+              ))}
+            </div>
             <label className="block text-sm text-gray-700 mb-1">Wiadomość</label>
             <textarea
               rows={6} className="input-field mb-4"
-              value={emailMsg || `Dzień dobry,\n\nw załączeniu przesyłamy ofertę nr ${offer.id}. Można ją obejrzeć i zaakceptować online:\n${publicUrl || '(link pojawi się po wysłaniu)'}\n\nOferta ważna do ${formatDate(validUntil)}.\n\nPozdrawiam,\n${offer.created_by_name}`}
+              value={emailMsg || `Dzień dobry${offer.contact_person ? ` ${offer.contact_person.split(' ')[0]}` : ''},\n\nw załączeniu przesyłamy ofertę nr ${label}${offer.project_name ? ` („${offer.project_name}”)` : ''}. Można ją obejrzeć i zaakceptować online:\n${publicUrl || '(link pojawi się po wysłaniu)'}\n\nOferta ważna do ${formatDate(validUntil)}.\n\nPozdrawiam,\n${offer.created_by_name}`}
               onChange={(e) => setEmailMsg(e.target.value)}
             />
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowEmail(false)} className="btn-secondary">Anuluj</button>
               <button
                 disabled={busy}
-                onClick={async () => { if (await put({ action: 'send_email', to: emailTo, message: emailMsg }, `Oferta wysłana na ${emailTo} (symulacja)`)) setShowEmail(false); }}
+                onClick={async () => { if (await put({ action: 'send_email', to: emailTo, message: emailMsg, cc: emailCc || offer.cc_emails || '' }, `Oferta wysłana na ${emailTo} (symulacja)`)) setShowEmail(false); }}
                 className="btn-primary disabled:opacity-50"
               >
                 📤 Wyślij

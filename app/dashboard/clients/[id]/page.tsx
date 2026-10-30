@@ -79,8 +79,8 @@ export default function ClientDetailPage() {
     const statusMap = {
       draft: { label: 'Szkic', class: 'bg-gray-100 text-gray-800' },
       sent: { label: 'Wysłana', class: 'bg-blue-100 text-blue-800' },
-      accepted: { label: 'Zaakceptowana', class: 'bg-green-100 text-green-800' },
-      rejected: { label: 'Odrzucona', class: 'bg-red-100 text-red-800' }
+      accepted: { label: 'Wygrana', class: 'bg-green-100 text-green-800' },
+      rejected: { label: 'Przegrana', class: 'bg-red-100 text-red-800' }
     };
     
     const statusInfo = statusMap[status as keyof typeof statusMap] || statusMap.draft;
