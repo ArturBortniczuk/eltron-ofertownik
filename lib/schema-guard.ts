@@ -38,6 +38,8 @@ export async function schemaStatus() {
           OR (table_name = 'product_prices' AND column_name = 'price_type')
           OR (table_name = 'products' AND column_name IN ('sku', 'min_price'))
           OR (table_name = 'users' AND column_name = 'monthly_target')
+          OR (table_name = 'product_margins' AND column_name IN ('cost_price', 'user_id'))
+          OR (table_name = 'offer_items' AND column_name = 'min_price')
           OR (table_name = 'offer_margin_summary' AND column_name = 'user_id'))) AS cols,
       (SELECT COUNT(*) FROM information_schema.tables
         WHERE table_schema = current_schema()
@@ -45,7 +47,7 @@ export async function schemaStatus() {
   `);
   const cols = Number(r.rows[0].cols);
   const tabs = Number(r.rows[0].tabs);
-  return { cols, tabs, upToDate: cols >= 10 && tabs >= 6 };
+  return { cols, tabs, upToDate: cols >= 13 && tabs >= 6 };
 }
 
 let ready: Promise<void> | null = null;

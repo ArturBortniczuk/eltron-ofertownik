@@ -82,6 +82,30 @@ CREATE TABLE IF NOT EXISTS product_margins (
     UNIQUE(product_id, user_id)
 );
 
+-- Tabele z poprzednich wersji mogły mieć mniej kolumn - uzupełnienie kompletu (idempotentne)
+ALTER TABLE product_margins ADD COLUMN IF NOT EXISTS user_id INTEGER;
+ALTER TABLE product_margins ADD COLUMN IF NOT EXISTS cost_price NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE product_margins ADD COLUMN IF NOT EXISTS margin_percent NUMERIC(8,2) DEFAULT 0;
+ALTER TABLE product_margins ADD COLUMN IF NOT EXISTS min_margin_percent NUMERIC(8,2) DEFAULT 10;
+ALTER TABLE product_margins ADD COLUMN IF NOT EXISTS max_discount_percent NUMERIC(8,2) DEFAULT 15;
+ALTER TABLE product_margins ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_margins_pair ON product_margins(product_id, user_id);
+ALTER TABLE product_prices ADD COLUMN IF NOT EXISTS cost_price NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE product_prices ADD COLUMN IF NOT EXISTS sale_price NUMERIC(12,2);
+ALTER TABLE product_prices ADD COLUMN IF NOT EXISTS margin_percent NUMERIC(8,2) DEFAULT 0;
+ALTER TABLE product_prices ADD COLUMN IF NOT EXISTS used_by INTEGER;
+ALTER TABLE product_prices ADD COLUMN IF NOT EXISTS used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS created_by INTEGER;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS cost_price NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS margin_percent NUMERIC(8,2) DEFAULT 0;
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS discount_percent NUMERIC(5,2) DEFAULT 0;
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS original_price NUMERIC(12,2);
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS product_id INTEGER;
+
 -- Rabaty indywidualne klientów
 CREATE TABLE IF NOT EXISTS client_discounts (
     id SERIAL PRIMARY KEY,
