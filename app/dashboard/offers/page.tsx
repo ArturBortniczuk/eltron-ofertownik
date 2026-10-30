@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { canAccessAllData } from '../../../lib/client-auth-utils';
 import { formatCurrency, formatDate, marginBadge, STATUS_META } from '../../../lib/format';
-import { StatusBadge, ApprovalBadge } from '../../components/StatusBadge';
+import { StatusBadge, ApprovalBadge, TypeBadge } from '../../components/StatusBadge';
+import CloseOfferModal, { CloseTarget } from '../../components/CloseOfferModal';
+import { offerLabel, SEGMENTS, OPEN_OFFERS_LIMIT } from '../../../lib/offer-rules';
 
 interface Offer {
   id: number;
@@ -24,6 +26,18 @@ interface Offer {
   market_region?: string;
   margin_percent?: number;
   total_margin?: number;
+  offer_number?: string;
+  revision?: number;
+  project_name?: string;
+  segment?: string;
+  offer_type?: string;
+  outcome?: string | null;
+  won_amount?: number | null;
+  contact_person?: string;
+  ekonom_order_no?: string | null;
+  total_net?: number;
+  valid_days?: number;
+  sent_at?: string | null;
 }
 
 const FILTERS = ['', 'draft', 'sent', 'accepted', 'rejected'] as const;
@@ -51,6 +65,20 @@ export default function OffersListPage() {
   const [selected, setSelected] = useState<number[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
+  const [segment, setSegment] = useState('');
+  const [offerType, setOfferType] = useState('');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueInfo, setOverdueInfo] = useState<{ count: number; blocked: boolean } | null>(null);
+  const [closing, setClosing] = useState<CloseTarget | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('overdue') === '1') setOverdueOnly(true);
+  }, []);
+
+  const loadOverdue = useCallback(() => {
+    fetch('/api/offers/overdue').then((r) => (r.ok ? r.json() : null)).then((d) => d && setOverdueInfo({ count: d.count, blocked: d.blocked })).catch(() => undefined);
+  }, []);
+  useEffect(() => { loadOverdue(); }, [loadOverdue]);
 
   const toggleOne = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -92,6 +120,9 @@ export default function OffersListPage() {
       if (debounced) params.set('q', debounced);
       if (approvalOnly) params.set('approval', 'pending');
       if (salesperson) params.set('user_id', salesperson);
+      if (segment) params.set('segment', segment);
+      if (offerType) params.set('type', offerType);
+      if (overdueOnly) params.set('overdue', '1');
       const response = await fetch(`/api/offers?${params}`);
       if (response.ok) {
         const data = await response.json();
@@ -103,7 +134,7 @@ export default function OffersListPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, statusFilter, debounced, approvalOnly, sort, salesperson]);
+  }, [currentPage, statusFilter, debounced, approvalOnly, sort, salesperson, segment, offerType, overdueOnly]);
 
   useEffect(() => {
     fetchOffers();
@@ -126,6 +157,11 @@ export default function OffersListPage() {
     setTimeout(() => setCopied(null), 1800);
   };
 
+  const stale = (o: Offer) => {
+    const base = new Date(o.sent_at || o.created_at).getTime();
+    return base + ((o.valid_days || 30) + 7) * 86400000 < Date.now();
+  };
+
   const allCount = Object.values(statusCounts).reduce((a, b) => a + b, 0);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -145,9 +181,34 @@ export default function OffersListPage() {
         </div>
       </div>
 
+      {overdueInfo && overdueInfo.count > 0 && (
+        <div className={`rounded-lg border p-4 flex flex-col md:flex-row md:items-center gap-3 ${overdueInfo.blocked ? 'bg-red-50 border-red-300' : 'bg-amber-50 border-amber-300'}`}>
+          <div className="flex-1 text-sm">
+            <div className={`font-semibold ${overdueInfo.blocked ? 'text-red-900' : 'text-amber-900'}`}>
+              {overdueInfo.blocked ? '⛔ Nowe oferty zablokowane' : '⚠️ Masz oferty bez wyniku'} – {overdueInfo.count} {overdueInfo.count === 1 ? 'oferta' : 'ofert'} po terminie ważności nadal „wisi” jako wysłana
+            </div>
+            <div className={overdueInfo.blocked ? 'text-red-800' : 'text-amber-800'}>
+              Oznacz każdą jako wygraną, przegraną lub wygraną częściowo (limit: {OPEN_OFFERS_LIMIT}). Dzięki temu lejek i prognoza są prawdziwe.
+            </div>
+          </div>
+          <button onClick={() => { setOverdueOnly(!overdueOnly); setCurrentPage(1); }} className="btn-secondary text-sm whitespace-nowrap">
+            {overdueOnly ? 'Pokaż wszystkie' : 'Pokaż oferty do rozliczenia'}
+          </button>
+        </div>
+      )}
+
       <div className="card space-y-4">
         <div className="flex flex-col md:flex-row gap-3">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} className="input-field flex-1" placeholder="Szukaj po kliencie lub numerze oferty..." />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} className="input-field flex-1" placeholder="Szukaj: klient, temat / inwestycja, numer oferty..." />
+          <select value={segment} onChange={(e) => { setSegment(e.target.value); setCurrentPage(1); }} className="input-field md:!w-52">
+            <option value="">Wszystkie segmenty</option>
+            {SEGMENTS.map((sg) => <option key={sg}>{sg}</option>)}
+          </select>
+          <select value={offerType} onChange={(e) => { setOfferType(e.target.value); setCurrentPage(1); }} className="input-field md:!w-40">
+            <option value="">Zakup i przetarg</option>
+            <option value="zakup">Zakup</option>
+            <option value="przetarg">Przetarg</option>
+          </select>
           {canViewAll && (
             <select value={salesperson} onChange={(e) => { setSalesperson(e.target.value); setCurrentPage(1); }} className="input-field md:!w-56">
               <option value="">Wszyscy handlowcy</option>
@@ -217,7 +278,7 @@ export default function OffersListPage() {
                     />
                   </th>
                   <th className="py-3 px-3 font-medium">Nr</th>
-                  <th className="py-3 px-3 font-medium">Klient</th>
+                  <th className="py-3 px-3 font-medium">Temat / klient</th>
                   {canViewAll && <th className="py-3 px-3 font-medium">Handlowiec</th>}
                   <th className="py-3 px-3 font-medium text-right">Wartość</th>
                   {canViewAll && <th className="py-3 px-3 font-medium text-right">Marża</th>}
@@ -232,10 +293,14 @@ export default function OffersListPage() {
                   return (
                     <tr key={offer.id} className={`table-row ${selected.includes(offer.id) ? 'bg-sky-50' : ''}`}>
                       <td className="py-3 px-3"><input type="checkbox" aria-label={`Zaznacz ofertę ${offer.id}`} checked={selected.includes(offer.id)} onChange={() => toggleOne(offer.id)} /></td>
-                      <td className="py-3 px-3 font-medium text-eltron-primary">#{offer.id}</td>
+                      <td className="py-3 px-3 font-medium text-eltron-primary whitespace-nowrap">{offerLabel(offer)}</td>
                       <td className="py-3 px-3">
-                        <Link href={`/dashboard/offers/${offer.id}`} className="font-medium text-gray-900 hover:text-eltron-primary">{offer.client_name}</Link>
+                        <Link href={`/dashboard/offers/${offer.id}`} className="font-medium text-gray-900 hover:text-eltron-primary">{offer.project_name || offer.client_name}</Link>
+                        <div className="text-xs text-gray-500">{offer.client_name}{offer.contact_person ? ` · ${offer.contact_person}` : ''}{offer.segment ? ` · ${offer.segment}` : ''}</div>
                         <div className="flex flex-wrap gap-1 mt-0.5">
+                          <TypeBadge type={offer.offer_type} />
+                          {offer.ekonom_order_no && <span className="text-xs text-indigo-600">🔗 {offer.ekonom_order_no}</span>}
+                          {offer.status === 'sent' && stale(offer) && <span className="text-xs text-red-600 font-medium">⏰ do rozliczenia</span>}
                           {overdue && <span className="text-xs text-red-600">📞 czas na kontakt</span>}
                           {offer.status === 'sent' && !!offer.view_count && <span className="text-xs text-sky-600">👀 {offer.view_count}x</span>}
                         </div>
@@ -252,12 +317,20 @@ export default function OffersListPage() {
                         </td>
                       )}
                       <td className="py-3 px-3">
-                        <div className="flex flex-col items-start gap-1"><StatusBadge status={offer.status} /><ApprovalBadge status={offer.approval_status} /></div>
+                        <div className="flex flex-col items-start gap-1"><StatusBadge status={offer.status} outcome={offer.outcome} /><ApprovalBadge status={offer.approval_status} /></div>
                       </td>
                       <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{formatDate(offer.created_at)}</td>
                       <td className="py-3 px-3">
                         <div className="flex gap-3 justify-end text-sm whitespace-nowrap">
                           <Link href={`/dashboard/offers/${offer.id}`} className="text-eltron-primary hover:underline font-medium">Podgląd</Link>
+                          {offer.status === 'sent' && (
+                            <button
+                              onClick={() => setClosing({ id: offer.id, label: offerLabel(offer), client_name: offer.client_name, total_net: Number(offer.total_net) || 0 })}
+                              className="text-green-700 hover:text-green-900 font-medium"
+                            >
+                              Rozlicz
+                            </button>
+                          )}
                           <button onClick={() => duplicate(offer.id)} disabled={duplicating === offer.id} className="text-gray-600 hover:text-eltron-primary disabled:opacity-50">
                             {duplicating === offer.id ? '...' : 'Kopiuj'}
                           </button>
@@ -283,6 +356,9 @@ export default function OffersListPage() {
             </div>
           )}
         </div>
+      )}
+      {closing && (
+        <CloseOfferModal offer={closing} onClose={() => setClosing(null)} onDone={() => { setClosing(null); fetchOffers(); loadOverdue(); }} />
       )}
     </div>
   );

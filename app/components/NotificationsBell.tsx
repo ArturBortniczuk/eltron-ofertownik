@@ -5,12 +5,12 @@ import Link from 'next/link';
 
 export interface NotificationData {
   items: Array<{ id: string; type: string; title: string; subtitle?: string; href: string }>;
-  counts: { approvals: number; tasks: number; followUps: number; expiring: number; viewed: number; decisions: number };
+  counts: { approvals: number; tasks: number; followUps: number; expiring: number; viewed: number; decisions: number; overdue: number };
   total: number;
 }
 
 const ICONS: Record<string, string> = {
-  approval: '🛡️', task: '✅', followup: '📞', expiring: '⏳', viewed: '👀', decision: '📝',
+  approval: '🛡️', task: '✅', followup: '📞', expiring: '⏳', viewed: '👀', decision: '📝', overdue: '⚠️',
 };
 
 export default function NotificationsBell({ data }: { data: NotificationData | null }) {

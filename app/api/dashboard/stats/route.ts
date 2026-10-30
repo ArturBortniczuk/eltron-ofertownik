@@ -11,7 +11,7 @@ export async function GET() {
     if (!user) return unauthorized();
 
     const canViewAll = user.canViewAll;
-    const w = canViewAll ? '' : 'AND o.user_id = $1';
+    const w = (canViewAll ? '' : 'AND o.user_id = $1') + ' AND o.is_current IS NOT FALSE';
     const p: any[] = canViewAll ? [] : [user.id];
 
     const [counts, monthly, recent, extra, targetRow, tasksRow] = await Promise.all([

@@ -203,6 +203,68 @@ CREATE TABLE IF NOT EXISTS offer_templates (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ===== Rozszerzenia: numeracja, warianty (negocjacje), temat/segment, wynik, Ekonom, producenci =====
+ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer VARCHAR(100);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS ekonom_code VARCHAR(50);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS in_ekonom BOOLEAN DEFAULT true;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS min_price NUMERIC(12,2);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_bonus_percent NUMERIC(5,2) DEFAULT 0;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_qty NUMERIC(12,2);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS production_note TEXT;
+
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS offer_number VARCHAR(30);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS revision INTEGER DEFAULT 0;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS parent_offer_id INTEGER;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS is_current BOOLEAN DEFAULT true;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS project_name VARCHAR(255);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS segment VARCHAR(100);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS offer_type VARCHAR(20) DEFAULT 'zakup';
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS tender_deadline DATE;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS remarks JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS outcome VARCHAR(20);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS won_amount NUMERIC(12,2);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS competitor VARCHAR(255);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS ekonom_order_no VARCHAR(40);
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS ekonom_exported_at TIMESTAMP;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS cc_emails TEXT;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS approval_level VARCHAR(40);
+
+-- Uzupełnienie starszych danych (idempotentne)
+UPDATE offers SET offer_number = 'OF/' || to_char(created_at, 'YYYY') || '/' || lpad(id::text, 4, '0') WHERE offer_number IS NULL;
+UPDATE offers SET outcome = 'won' WHERE status = 'accepted' AND outcome IS NULL;
+UPDATE offers SET outcome = 'lost' WHERE status = 'rejected' AND outcome IS NULL;
+UPDATE offers SET is_current = true WHERE is_current IS NULL;
+UPDATE offers SET revision = 0 WHERE revision IS NULL;
+UPDATE products SET ekonom_code = 'EK-' || lpad(id::text, 5, '0') WHERE ekonom_code IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_offers_number_revision ON offers(offer_number, revision);
+CREATE INDEX IF NOT EXISTS idx_offers_segment ON offers(segment);
+CREATE INDEX IF NOT EXISTS idx_offers_outcome ON offers(outcome);
+
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS availability VARCHAR(20) DEFAULT 'available';
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS availability_note TEXT;
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS item_note TEXT;
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS min_price NUMERIC(12,2);
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS in_ekonom BOOLEAN DEFAULT true;
+ALTER TABLE offer_items ADD COLUMN IF NOT EXISTS manufacturer VARCHAR(100);
+
+-- Zapytania ofertowe do producentów / dostawców
+CREATE TABLE IF NOT EXISTS supplier_requests (
+    id SERIAL PRIMARY KEY,
+    offer_id INTEGER REFERENCES offers(id) ON DELETE CASCADE,
+    manufacturer VARCHAR(150) NOT NULL,
+    message TEXT,
+    items JSONB NOT NULL,
+    status VARCHAR(20) DEFAULT 'sent',
+    response JSONB,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    responded_at TIMESTAMP,
+    applied_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_requests_offer ON supplier_requests(offer_id);
+
 -- Widok podsumowania marży ofert (marża liczona od kosztu: (sprzedaż - koszt) / koszt)
 -- Widok nie przechowuje danych, więc można go bezpiecznie odtworzyć (także gdy starszy miał inną strukturę)
 DROP VIEW IF EXISTS offer_margin_summary;

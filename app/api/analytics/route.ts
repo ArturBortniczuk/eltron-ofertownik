@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const requested = parseInt(searchParams.get('user_id') || '', 10);
     // Handlowiec widzi tylko siebie; zarząd i centrum - całość lub wybranego handlowca
     const scoped: number | null = user.canViewAll ? (Number.isInteger(requested) ? requested : null) : user.id;
-    const w = scoped ? 'AND o.user_id = $1' : '';
+    const w = (scoped ? 'AND o.user_id = $1' : '') + ' AND o.is_current IS NOT FALSE';
     const p: any[] = scoped ? [scoped] : [];
     const since = `date_trunc('month', NOW()) - INTERVAL '${months - 1} months'`;
 

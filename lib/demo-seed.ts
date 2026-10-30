@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { db } from './db';
 import { runSchema } from './schema-guard';
 import { computeOffer, round2 } from './offer-calc';
+import { availabilityFor, suggestSegment } from './offer-rules';
 
 export async function ensureSchema() {
   await runSchema();
@@ -72,8 +73,23 @@ const PRODUCTS: Array<[string, string, string, string, number, number]> = [
   ['Kabel ziemny YKY 5x10 mm²', 'm', 'Kable i przewody', 'KB-YKY-5x10', 24.0, 24],
   ['Przewód H07V-K 1x2,5 mm² czarny', 'm', 'Kable i przewody', 'KB-H07-25', 1.65, 34],
   ['Kabel UTP kat. 6 (skrętka)', 'm', 'Kable i przewody', 'KB-UTP6', 1.4, 38],
-  ['Rura osłonowa peszel 20 mm', 'm', 'Kable i przewody', 'KB-PESZ20', 0.95, 40],
-  ['Korytko kablowe perforowane 100x60', 'm', 'Kable i przewody', 'KB-KOR-100', 14.5, 28],
+  ['Rura osłonowa peszel 20 mm', 'm', 'Rury i osprzęt kablowy', 'RU-PESZ20', 0.95, 40],
+  ['Korytko kablowe perforowane 100x60', 'm', 'Rury i osprzęt kablowy', 'RU-KOR-100', 14.5, 28],
+  ['Kabel ziemny YKY 4x35 mm²', 'm', 'Kable i przewody', 'KB-YKY-4x35', 44.0, 23],
+  ['Kabel ziemny YAKY 4x120 mm²', 'm', 'Kable i przewody', 'KB-YAKY-4x120', 41.0, 22],
+  ['Rura osłonowa RHDPE 110 mm', 'm', 'Rury i osprzęt kablowy', 'RU-RHDPE-110', 6.8, 35],
+  ['Rura karbowana DVK 75 mm', 'm', 'Rury i osprzęt kablowy', 'RU-DVK-75', 4.2, 38],
+  ['Taśma ostrzegawcza do kabli niebieska (rolka 100 m)', 'szt', 'Rury i osprzęt kablowy', 'RU-TASMA-OST', 19.0, 45],
+  ['Bednarka ocynkowana FeZn 30x4', 'm', 'Bednarki i uziemienia', 'BD-FEZN-30', 8.2, 28],
+  ['Drut stalowy ocynkowany fi 8', 'm', 'Bednarki i uziemienia', 'BD-DRUT-8', 2.6, 30],
+  ['Złączka krzyżowa do bednarki', 'szt', 'Bednarki i uziemienia', 'BD-ZLACZ-KRZ', 4.1, 45],
+  ['Uziom pionowy 1,5 m ocynkowany', 'szt', 'Bednarki i uziemienia', 'BD-UZIOM-15', 22.0, 33],
+  ['Mufa kablowa termokurczliwa 4x16-35', 'kpl', 'Osprzęt energetyczny', 'OE-MUFA-1635', 84.0, 34],
+  ['Głowica kablowa wnętrzowa 4x16-35', 'kpl', 'Osprzęt energetyczny', 'OE-GLOW-1635', 48.0, 36],
+  ['Końcówka kablowa Cu 16 mm² (zaprasowywana)', 'szt', 'Osprzęt energetyczny', 'OE-KONC-16', 1.8, 55],
+  ['Złącze kablowe ZK-1c z fundamentem', 'szt', 'Osprzęt energetyczny', 'OE-ZK1C', 310.0, 28],
+  ['Rozłącznik bezpiecznikowy NH00 3P', 'szt', 'Osprzęt energetyczny', 'OE-NH00-3P', 126.0, 29],
+  ['Wkładka topikowa NH00 63A gG', 'szt', 'Osprzęt energetyczny', 'OE-WKL-NH00', 7.4, 45],
   ['Wyłącznik nadprądowy B16 1P', 'szt', 'Aparatura modułowa', 'AP-B16-1P', 9.8, 36],
   ['Wyłącznik nadprądowy B10 1P', 'szt', 'Aparatura modułowa', 'AP-B10-1P', 9.6, 36],
   ['Wyłącznik nadprądowy C25 3P', 'szt', 'Aparatura modułowa', 'AP-C25-3P', 58.0, 30],
@@ -94,6 +110,7 @@ const PRODUCTS: Array<[string, string, string, string, number, number]> = [
   ['Taśma LED 12V 14,4W/m IP20', 'm', 'Oświetlenie LED', 'OL-TASMA', 11.0, 42],
   ['Naświetlacz LED 100W IP65', 'szt', 'Oświetlenie LED', 'OL-NAS-100', 69.0, 33],
   ['Oprawa uliczna LED 60W', 'szt', 'Oświetlenie LED', 'OL-ULICA-60', 245.0, 27],
+  ['Oprawa specjalna wg projektu klienta (indywidualna)', 'szt', 'Oświetlenie LED', 'NE-OPRAWA-IND', 420.0, 30],
   ['Czujnik ruchu 360° ścienny', 'szt', 'Oświetlenie LED', 'OL-CZUJ-360', 29.0, 40],
   ['Rozdzielnica natynkowa 24 mod. IP40', 'szt', 'Rozdzielnice', 'RZ-NAT-24', 96.0, 32],
   ['Rozdzielnica podtynkowa 36 mod.', 'szt', 'Rozdzielnice', 'RZ-POD-36', 148.0, 31],
@@ -110,8 +127,46 @@ const PRODUCTS: Array<[string, string, string, string, number, number]> = [
   ['Konstrukcja montażowa PV (dach skośny)', 'kpl', 'Fotowoltaika i e-mobility', 'PV-KONS-S', 780.0, 22],
   ['Stacja ładowania EV 11 kW', 'szt', 'Fotowoltaika i e-mobility', 'EV-WALL-11', 2450.0, 20],
   ['Montaż i uruchomienie – robocizna', 'godz', 'Usługi', 'US-MONTAZ', 85.0, 35],
+  ['Konstrukcja wsporcza wg rysunku klienta', 'kpl', 'Usługi', 'NE-KONSTR-IND', 640.0, 26],
   ['Pomiary elektryczne z protokołem', 'usł', 'Usługi', 'US-POMIARY', 320.0, 40],
 ];
+
+// Producenci (do podpowiedzi RFQ i analiz) i bonusy zakupowe dostawców (%)
+const MANUFACTURERS: Record<string, string[]> = {
+  'Kable i przewody': ['TELE-FONIKA Kable', 'Elektrokabel', 'Nexans'],
+  'Rury i osprzęt kablowy': ['Pawbol', 'Elektro-Plast', 'Kopos'],
+  'Bednarki i uziemienia': ['Dehn', 'Elektromet', 'Zinkpol'],
+  'Osprzęt energetyczny': ['Cellpack', 'Raychem', 'Apator'],
+  'Osprzęt instalacyjny': ['Kontakt-Simon', 'Legrand', 'Schneider Electric'],
+  'Aparatura modułowa': ['Eaton', 'Hager', 'ABB'],
+  'Rozdzielnice': ['Hager', 'Elektro-Plast', 'ABB'],
+  'Oświetlenie LED': ['LEDVANCE', 'Philips', 'Kanlux'],
+  'Automatyka': ['Siemens', 'Schneider Electric', 'Eaton'],
+  'Fotowoltaika i e-mobility': ['Huawei', 'Fronius', 'Jinko Solar'],
+  'Usługi': ['Eltron Serwis'],
+};
+const BONUS: Record<string, number> = {
+  'TELE-FONIKA Kable': 3.5, Elektrokabel: 2.5, Nexans: 3, Pawbol: 2, 'Elektro-Plast': 1.5, Kopos: 2, Dehn: 4, Elektromet: 2, Zinkpol: 1.5,
+  Cellpack: 4.5, Raychem: 5, Apator: 3, 'Kontakt-Simon': 3, Legrand: 4, 'Schneider Electric': 4.5, Eaton: 5, Hager: 4, ABB: 5.5,
+  LEDVANCE: 3, Philips: 3.5, Kanlux: 2.5, Siemens: 5, Huawei: 2, Fronius: 3, 'Jinko Solar': 2.5, 'Eltron Serwis': 0,
+};
+const PRODUCTION_NOTES = ['produkcja ok. 14 dni', 'produkcja ok. 3 tygodnie', 'dostawa od producenta 7 dni', 'dostawa od producenta 10 dni'];
+const ITEM_NOTES = ['Kolor RAL 7035', 'Wymagany atest / certyfikat zgodności', 'Cięcie na bębny po 500 m', 'Dostawa partiami wg harmonogramu budowy', 'Wg specyfikacji klienta', 'Opakowanie zbiorcze na palecie'];
+const COMPETITORS = ['Elektrohurt Plus', 'Kablex', 'Hurtownia Volt', 'Rynek Prądu', 'Instalmax'];
+const PROJECT_TOPICS: Record<string, string[]> = {
+  'Kable i przewody': ['Zasilanie kablowe', 'Okablowanie budynku', 'Linia kablowa nN'],
+  'Rury i osprzęt kablowy': ['Kanalizacja kablowa', 'Trasy kablowe', 'Prowadzenie instalacji'],
+  'Bednarki i uziemienia': ['Instalacja uziemiająca', 'Uziemienie i piorunochrony', 'Wyrównanie potencjałów'],
+  'Osprzęt energetyczny': ['Przyłącze energetyczne', 'Stacja SN/nN – osprzęt', 'Modernizacja złączy kablowych'],
+  'Osprzęt instalacyjny': ['Wyposażenie instalacji', 'Remont instalacji elektrycznej', 'Wykończenie biur'],
+  'Aparatura modułowa': ['Modernizacja rozdzielni', 'Wymiana zabezpieczeń', 'Zabezpieczenia obwodów'],
+  'Rozdzielnice': ['Rozdzielnice główne', 'Nowa rozdzielnia piętrowa', 'Szafy sterownicze'],
+  'Oświetlenie LED': ['Modernizacja oświetlenia', 'Oświetlenie hali', 'Oświetlenie zewnętrzne'],
+  Automatyka: ['Automatyka linii', 'Modernizacja sterowania', 'Napędy i falowniki'],
+  'Fotowoltaika i e-mobility': ['Instalacja fotowoltaiczna', 'Stacje ładowania EV', 'Farma PV dachowa'],
+  Usługi: ['Pomiary i uruchomienie', 'Serwis instalacji', 'Prace montażowe'],
+  Mieszany: ['Kompleksowa dostawa materiałów', 'Zaopatrzenie budowy', 'Dostawa wg specyfikacji'],
+};
 
 // name, city, personaIndex (0-3 handlowcy, 5 centrum elektryczne, 6 budowy)
 const CLIENTS: Array<[string, string, number]> = [
@@ -205,7 +260,7 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
 
     if (opts.reset) {
       await client.query(
-        `TRUNCATE registration_attempts, offer_templates, tasks, client_interactions, offer_activity,
+        `TRUNCATE registration_attempts, supplier_requests, offer_templates, tasks, client_interactions, offer_activity,
          offer_items, offers, client_discounts, product_margins, product_prices, products, clients, users
          RESTART IDENTITY CASCADE`
       );
@@ -236,10 +291,28 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
     const adminIdx = 4;
 
     // Produkty
+    const productMeta = PRODUCTS.map((p) => {
+      const list = MANUFACTURERS[p[2]] || ['Eltron'];
+      const manufacturer = list[(p[3].length * 7 + p[3].charCodeAt(p[3].length - 1)) % list.length];
+      const unit = p[1];
+      const stockChoices = unit === 'm' ? [0, 150, 800, 3000] : unit === 'godz' || unit === 'usł' ? [9999] : [0, 3, 12, 60, 400];
+      const stock = stockChoices[int(0, stockChoices.length - 1)];
+      return {
+        manufacturer: p[2] === 'Usługi' ? 'Eltron Serwis' : manufacturer,
+        stock, note: stock >= 9999 ? null : pick(PRODUCTION_NOTES),
+        bonus: BONUS[manufacturer] ?? 0,
+        minPrice: round2(p[4] * 1.1),
+        inEkonom: !p[3].startsWith('NE-'),
+      };
+    });
     const productRows = await bulk(
       client, 'products',
-      ['name', 'unit', 'created_by', 'created_at', 'last_used', 'sku', 'category'],
-      PRODUCTS.map((p) => [p[0], p[1], userIds[5], ts(daysAgo(380)), ts(daysAgo(int(0, 60))), p[3], p[2]]),
+      ['name', 'unit', 'created_by', 'created_at', 'last_used', 'sku', 'category', 'manufacturer', 'ekonom_code', 'in_ekonom', 'min_price', 'supplier_bonus_percent', 'stock_qty', 'production_note'],
+      PRODUCTS.map((p, i) => [
+        p[0], p[1], userIds[5], ts(daysAgo(380)), ts(daysAgo(int(0, 60))), p[3], p[2], productMeta[i].manufacturer,
+        productMeta[i].inEkonom ? `EK-${String(1000 + i * 7)}` : null, productMeta[i].inEkonom, productMeta[i].minPrice,
+        productMeta[i].bonus, productMeta[i].stock, productMeta[i].note,
+      ]),
       'id'
     );
     result.products = productRows.length;
@@ -309,9 +382,14 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
       viewedAt: Date | null; viewCount: number; followUp: string | null; lostReason: string | null;
       delivery: number; valid: number; additional: number; additionalDesc: string | null; notes: string | null;
       approvedAt: Date | null; items: any[];
+      group: number; rev: number; isCurrent: boolean; segment: string; project: string; offerType: string;
+      tenderDeadline: string | null; remarks: Array<{ target: string; text: string }>; outcome: string | null;
+      wonAmount: number | null; competitor: string | null; closedAt: Date | null; ekonomNo: string | null;
     }
     const drafts: DraftOffer[] = [];
     const OFFER_COUNT = 140;
+    const staleLeft: Record<number, number> = { 0: 2, 1: 5 };
+    let ekonomSeq = 1;
     for (let n = 0; n < OFFER_COUNT; n++) {
       const ui = pickUser();
       const own = clientsByUser.get(ui) || clientsByUser.get(0)!;
@@ -340,9 +418,14 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
         else if (unit === 'opak') quantity = int(1, 12);
         else if (unit === 'kpl' || unit === 'usł') quantity = int(1, 6);
         else quantity = expensive ? int(1, 10) : int(2, 80);
+        const meta = productMeta[pi];
+        const av = availabilityFor(quantity, meta.stock, unit, meta.note);
         items.push({
           product_name: name, unit, quantity, unit_price: unitPrice, vat_rate: 23,
           cost_price: cost, discount_percent: round2(discount), original_price: basePrice, _pi: pi,
+          min_price: meta.minPrice, manufacturer: meta.manufacturer, in_ekonom: meta.inEkonom,
+          availability: av.availability, availability_note: av.availability_note,
+          item_note: rand() < 0.13 ? pick(ITEM_NOTES) : '',
         });
       }
       const additional = rand() < 0.28 ? Math.round(between(150, 900) / 10) * 10 : 0;
@@ -373,22 +456,98 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
       const viewedAt = viewed && sentAt ? new Date(Math.min(now.getTime(), sentAt.getTime() + 3600000 * int(1, 60))) : null;
       const followUp = status === 'sent' && sentAt ? dateOnly(new Date(sentAt.getTime() + 86400000 * pick([3, 5, 7, 10]))) : null;
 
+      // Scenariusz demo: część starszych ofert „wisi” bez oznaczonego wyniku (limit ofert do rozliczenia)
+      let staleForced = false;
+      if (staleLeft[ui] > 0 && age >= 85 && sentAt && approval !== 'pending' && approval !== 'rejected' && status !== 'draft') {
+        staleLeft[ui]--;
+        staleForced = true;
+        status = 'sent';
+        acceptedAt = null;
+        lostReason = null;
+      }
+      const effFollowUp = staleForced ? null : followUp;
+
+      const segment = suggestSegment(calc.items.map((it, idx) => ({ category: PRODUCTS[items[idx]._pi][2], net_amount: it.net_amount })));
+      const topic = (PROJECT_TOPICS[segment] || PROJECT_TOPICS.Mieszany)[(ci + n) % 3];
+      const place = CLIENTS[ci][0].replace(/ (Sp\. z o\.o\.|S\.A\.)$/, '').replace(/^(Budowa|Gmina|Szpital|Hotel):? /, '');
+      const publicBuyer = /Gmina|Szpital|Szkoła|Wydział/.test(CLIENTS[ci][0]);
+      const isTender = publicBuyer ? rand() < 0.5 : rand() < 0.07;
+      let outcome: string | null = null;
+      let wonAmount: number | null = null;
+      let competitor: string | null = null;
+      if (status === 'accepted') {
+        if (rand() < 0.15) { outcome = 'partial'; wonAmount = round2(calc.totals.net * between(0.3, 0.7)); competitor = pick(COMPETITORS); lostReason = lostReason || 'Część zamówiono u konkurencji'; }
+        else { outcome = 'won'; wonAmount = calc.totals.net; }
+      } else if (status === 'rejected') {
+        outcome = 'lost'; competitor = rand() < 0.6 ? pick(COMPETITORS) : null;
+      }
+      const closedAt = outcome ? (acceptedAt || new Date(Math.min(now.getTime(), (sentAt || createdAt).getTime() + 86400000 * int(3, 20)))) : null;
+      const remarkRoll = rand();
+      const remarks: Array<{ target: string; text: string }> = [];
+      if (remarkRoll < 0.2) remarks.push({ target: 'Klient', text: pick(OFFER_NOTES.filter(Boolean)) });
+      else if (remarkRoll < 0.3) remarks.push({ target: 'Producent', text: 'Prosimy o potwierdzenie terminu produkcji oraz możliwości dostawy partiami.' });
+      else if (remarkRoll < 0.4) remarks.push({ target: 'Wewnętrzna', text: 'Klient wrażliwy na cenę – nie schodzić poniżej ceny minimalnej.' });
+      const ekonomNo = outcome && outcome !== 'lost' && acceptedAt && now.getTime() - acceptedAt.getTime() > 3 * 86400000 && rand() < 0.7
+        ? `ZO/${acceptedAt.getFullYear()}/${String(ekonomSeq++).padStart(4, '0')}` : null;
+
       drafts.push({
         ui, ci, createdAt, calc, status, approval, approvalNote, approvedAt, sentAt, acceptedAt, viewedAt, viewCount,
-        followUp, lostReason, delivery: pick([3, 7, 14, 14, 21, 30]), valid: pick([14, 30, 30, 60]),
+        followUp: effFollowUp, lostReason, delivery: pick([3, 7, 14, 14, 21, 30]), valid: pick([14, 30, 30, 60]),
         additional, additionalDesc: additional ? pick(['Transport', 'Transport i rozładunek', 'Montaż i uruchomienie']) : null,
         notes: pick(OFFER_NOTES) || null, items: calc.items.map((it, idx) => ({ ...it, _pi: items[idx]._pi })),
+        group: n, rev: 0, isCurrent: true, segment, project: `${topic} – ${place}`, offerType: isTender ? 'przetarg' : 'zakup',
+        tenderDeadline: isTender ? dateOnly(new Date(createdAt.getTime() + 86400000 * 14)) : null,
+        remarks, outcome, wonAmount, competitor, closedAt, ekonomNo,
       });
     }
-    drafts.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    // Wariant negocjacyjny: część ofert miała wcześniejsze wersje z wyższymi cenami (OF/2026/0042, .1, .2)
+    const nowMs = now.getTime();
+    let chains = 0;
+    for (const d of [...drafts]) {
+      const ageDays = (nowMs - d.createdAt.getTime()) / 86400000;
+      if (chains >= 14 || ageDays < 14 || d.approval !== 'none' || !['sent', 'accepted', 'rejected'].includes(d.status) || rand() > 0.12) continue;
+      chains++;
+      const prev = int(1, 2);
+      d.rev = prev;
+      for (let k = 0; k < prev; k++) {
+        const factor = 1 + 0.045 * (prev - k);
+        const items2 = d.items.map((it: any) => ({ ...it, unit_price: round2(it.unit_price * factor) }));
+        const calc2 = computeOffer({ items: items2, additional_costs: d.additional });
+        const createdAt2 = new Date(d.createdAt.getTime() - (prev - k) * 86400000 * 3);
+        drafts.push({
+          ...d, rev: k, isCurrent: false, createdAt: createdAt2, calc: calc2, status: 'sent', outcome: null, wonAmount: null,
+          competitor: null, closedAt: null, ekonomNo: null, acceptedAt: null, lostReason: null, followUp: null,
+          sentAt: new Date(createdAt2.getTime() + 3600000 * 3), viewedAt: null, viewCount: 0,
+          items: calc2.items.map((it, idx) => ({ ...it, _pi: d.items[idx]._pi })),
+        });
+      }
+    }
+    drafts.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.rev - b.rev);
+    // Unikalne numery ofert: OF/rok/0001 (warianty jednej oferty dzielą numer i różnią się rewizją)
+    const yearCounters = new Map<number, number>();
+    const groupNumbers = new Map<number, string>();
+    const numbers: string[] = drafts.map((d) => {
+      let num = groupNumbers.get(d.group);
+      if (!num) {
+        const y = d.createdAt.getFullYear();
+        const c = (yearCounters.get(y) || 0) + 1;
+        yearCounters.set(y, c);
+        num = `OF/${y}/${String(c).padStart(4, '0')}`;
+        groupNumbers.set(d.group, num);
+      }
+      return num;
+    });
 
     const offerIdRows = await bulk(
       client, 'offers',
       ['user_id', 'client_id', 'client_name', 'client_email', 'client_phone', 'delivery_days', 'valid_days', 'additional_costs',
         'additional_costs_description', 'notes', 'total_net', 'total_vat', 'total_gross', 'created_at', 'updated_at', 'status',
         'public_token', 'sent_at', 'accepted_at', 'viewed_at', 'view_count', 'follow_up_date', 'lost_reason',
-        'approval_status', 'approval_note', 'approved_by', 'approved_at'],
-      drafts.map((d) => {
+        'approval_status', 'approval_note', 'approved_by', 'approved_at',
+        'offer_number', 'revision', 'is_current', 'project_name', 'segment', 'offer_type', 'tender_deadline', 'contact_person',
+        'remarks', 'outcome', 'won_amount', 'competitor', 'closed_at', 'ekonom_order_no', 'ekonom_exported_at', 'approval_level'],
+      drafts.map((d, di) => {
         const c = CLIENTS[d.ci];
         const contactEmail = `${slug(CONTACTS[d.ci % CONTACTS.length].split(' ')[1])}@${slug(c[0]).slice(0, 18)}.pl`;
         return [
@@ -398,12 +557,23 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
           d.sentAt ? ts(d.sentAt) : null, d.acceptedAt ? ts(d.acceptedAt) : null, d.viewedAt ? ts(d.viewedAt) : null, d.viewCount,
           d.followUp, d.lostReason, d.approval, d.approvalNote,
           d.approvedAt ? userIds[adminIdx] : null, d.approvedAt ? ts(d.approvedAt) : null,
+          numbers[di], d.rev, d.isCurrent, d.project, d.segment, d.offerType, d.tenderDeadline, CONTACTS[d.ci % CONTACTS.length],
+          JSON.stringify(d.remarks), d.outcome, d.wonAmount, d.competitor, d.closedAt ? ts(d.closedAt) : null,
+          d.ekonomNo, d.ekonomNo && d.acceptedAt ? ts(new Date(d.acceptedAt.getTime() + 86400000)) : null,
+          d.calc.approvalLevel,
         ];
       }),
       'id'
     );
     result.offers = offerIdRows.length;
     const offerIds: number[] = offerIdRows.map((r: any) => r.id);
+    // Powiązanie wariantów: wersja N wskazuje na wersję N-1 tej samej oferty
+    for (let i = 0; i < drafts.length; i++) {
+      if (drafts[i].rev > 0) {
+        const parent = drafts.findIndex((x) => x.group === drafts[i].group && x.rev === drafts[i].rev - 1);
+        if (parent >= 0) await client.query('UPDATE offers SET parent_offer_id = $1 WHERE id = $2', [offerIds[parent], offerIds[i]]);
+      }
+    }
 
     const itemRows: any[][] = [];
     const priceRows: any[][] = [];
@@ -413,11 +583,14 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
       const offerId = offerIds[idx];
       d.items.forEach((it: any, pos: number) => {
         itemRows.push([offerId, productIds[it._pi], it.product_name, it.quantity, it.unit, it.unit_price, it.vat_rate, it.net_amount,
-          it.vat_amount, it.gross_amount, it.cost_price, it.margin_percent, it.discount_percent, it.original_price, pos + 1]);
+          it.vat_amount, it.gross_amount, it.cost_price, it.margin_percent, it.discount_percent, it.original_price, pos + 1,
+          it.min_price || null, it.manufacturer || null, it.in_ekonom !== false, it.availability, it.availability_note || null, it.item_note || null]);
         priceRows.push([productIds[it._pi], it.unit_price, it.cost_price, it.unit_price, it.margin_percent, userIds[d.ui], ts(d.createdAt), 'sale']);
       });
       const who = userNames[d.ui];
-      activityRows.push([offerId, userIds[d.ui], who, 'created', 'Utworzono ofertę', ts(d.createdAt)]);
+      activityRows.push([offerId, userIds[d.ui], who, 'created',
+        d.rev > 0 ? `Utworzono wariant negocjacyjny ${numbers[idx]}.${d.rev}` : `Utworzono ofertę ${numbers[idx]}: ${d.project}`, ts(d.createdAt)]);
+      if (d.ekonomNo && d.acceptedAt) activityRows.push([offerId, userIds[d.ui], who, 'ekonom', `Przekazano do Ekonoma jako zamówienie ${d.ekonomNo} – symulacja`, ts(new Date(d.acceptedAt.getTime() + 86400000))]);
       if (d.approval !== 'none') {
         activityRows.push([offerId, userIds[d.ui], who, 'approval', 'Oferta wymaga akceptacji zarządu (niska marża)', ts(new Date(d.createdAt.getTime() + 60000))]);
         if (d.approvedAt) {
@@ -429,14 +602,14 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
       if (d.viewedAt) activityRows.push([offerId, null, 'Klient', 'viewed', `Klient otworzył ofertę (${d.viewCount}x)`, ts(d.viewedAt)]);
       if (d.acceptedAt) activityRows.push([offerId, null, 'Klient', 'client_response', 'Klient zaakceptował ofertę online', ts(d.acceptedAt)]);
       if (d.status === 'rejected' && d.sentAt) {
-        activityRows.push([offerId, userIds[d.ui], who, 'status', `Status zmieniony na: Odrzucona (${d.lostReason})`, ts(new Date(Math.min(now.getTime(), d.sentAt.getTime() + 86400000 * int(3, 20))))]);
+        activityRows.push([offerId, userIds[d.ui], who, 'status', `Status zmieniony na: Przegrana (${d.lostReason})`, ts(new Date(Math.min(now.getTime(), d.sentAt.getTime() + 86400000 * int(3, 20))))]);
       }
       if (rand() < 0.22 && d.sentAt) activityRows.push([offerId, userIds[d.ui], who, 'comment', pick(COMMENTS), ts(new Date(Math.min(now.getTime(), d.sentAt.getTime() + 3600000 * int(2, 72))))]);
       if (d.status === 'sent' && d.followUp) {
         taskRows.push([userIds[d.ui], offerId, clientIds[d.ci], `Zadzwonić do ${CLIENTS[d.ci][0]} w sprawie oferty`, d.followUp, false]);
       }
     });
-    await bulk(client, 'offer_items', ['offer_id', 'product_id', 'product_name', 'quantity', 'unit', 'unit_price', 'vat_rate', 'net_amount', 'vat_amount', 'gross_amount', 'cost_price', 'margin_percent', 'discount_percent', 'original_price', 'position_order'], itemRows);
+    await bulk(client, 'offer_items', ['offer_id', 'product_id', 'product_name', 'quantity', 'unit', 'unit_price', 'vat_rate', 'net_amount', 'vat_amount', 'gross_amount', 'cost_price', 'margin_percent', 'discount_percent', 'original_price', 'position_order', 'min_price', 'manufacturer', 'in_ekonom', 'availability', 'availability_note', 'item_note'], itemRows);
     await bulk(client, 'product_prices', ['product_id', 'price', 'cost_price', 'sale_price', 'margin_percent', 'used_by', 'used_at', 'price_type'], priceRows);
     await bulk(client, 'offer_activity', ['offer_id', 'user_id', 'actor_name', 'type', 'message', 'created_at'], activityRows);
 
@@ -464,6 +637,40 @@ export async function seedDemo(opts: { reset: boolean }): Promise<SeedResult> {
       }
     });
     await bulk(client, 'client_interactions', ['client_id', 'user_id', 'type', 'content', 'created_at'], interactionRows);
+
+    // Zapytania do producentów (kilka w toku, kilka z odpowiedzią)
+    const recentSent = drafts
+      .map((d, i) => ({ d, i }))
+      .filter(({ d }) => d.status === 'sent' && d.isCurrent && d.sentAt && nowMs - d.sentAt.getTime() < 40 * 86400000)
+      .slice(0, 6);
+    if (recentSent.length) {
+      const itemsDb = await client.query(
+        `SELECT id, offer_id, manufacturer, product_name, quantity, unit, cost_price FROM offer_items WHERE offer_id = ANY($1::int[]) ORDER BY position_order`,
+        [recentSent.map(({ i }) => offerIds[i])]
+      );
+      const rfqRows: any[][] = [];
+      recentSent.forEach(({ d, i }, k) => {
+        const mine = itemsDb.rows.filter((r: any) => r.offer_id === offerIds[i] && r.manufacturer);
+        if (!mine.length) return;
+        const manufacturer = mine[0].manufacturer;
+        const lines = mine.filter((r: any) => r.manufacturer === manufacturer);
+        const answered = k % 2 === 1;
+        const response = answered
+          ? lines.map((l: any) => ({
+              item_id: l.id, product_name: l.product_name, quantity: Number(l.quantity), unit: l.unit, old_cost: Number(l.cost_price),
+              quoted_cost: round2(Number(l.cost_price) * (0.94 + ((l.id * 37) % 10) / 100)), lead_days: [3, 7, 10, 14, 21][l.id % 5],
+            }))
+          : null;
+        rfqRows.push([
+          offerIds[i], manufacturer,
+          `Dzień dobry,\n\nprosimy o wycenę poniższych pozycji do tematu „${d.project}” (oferta ${numbers[i]}).`,
+          JSON.stringify(lines.map((l: any) => ({ id: l.id, product_name: l.product_name, quantity: Number(l.quantity), unit: l.unit }))),
+          answered ? 'answered' : 'sent', response ? JSON.stringify(response) : null, userIds[d.ui], ts(new Date(d.sentAt!.getTime() + 3600000 * 5)),
+          answered ? ts(new Date(d.sentAt!.getTime() + 86400000)) : null,
+        ]);
+      });
+      await bulk(client, 'supplier_requests', ['offer_id', 'manufacturer', 'message', 'items', 'status', 'response', 'created_by', 'created_at', 'responded_at'], rfqRows);
+    }
 
     // Szablony ofert
     const tpl = (names: string[], qty: number[]) =>

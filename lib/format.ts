@@ -44,8 +44,8 @@ export const daysBetween = (from: string | Date, to: string | Date = new Date())
 export const STATUS_META: Record<string, { label: string; badge: string; dot: string; column: string }> = {
   draft: { label: 'Szkic', badge: 'bg-gray-100 text-gray-800', dot: 'bg-gray-400', column: 'border-gray-300' },
   sent: { label: 'Wysłana', badge: 'bg-blue-100 text-blue-800', dot: 'bg-blue-500', column: 'border-blue-300' },
-  accepted: { label: 'Zaakceptowana', badge: 'bg-green-100 text-green-800', dot: 'bg-green-500', column: 'border-green-300' },
-  rejected: { label: 'Odrzucona', badge: 'bg-red-100 text-red-800', dot: 'bg-red-500', column: 'border-red-300' },
+  accepted: { label: 'Wygrana', badge: 'bg-green-100 text-green-800', dot: 'bg-green-500', column: 'border-green-300' },
+  rejected: { label: 'Przegrana', badge: 'bg-red-100 text-red-800', dot: 'bg-red-500', column: 'border-red-300' },
 };
 
 export const APPROVAL_META: Record<string, { label: string; badge: string }> = {

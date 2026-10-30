@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { db } from '../../../lib/db';
 import { getApiUser, unauthorized, serverError } from '../../../lib/api-auth';
+import { overdueOffers } from '../../../lib/offers-db';
+import { OPEN_OFFERS_LIMIT } from '../../../lib/offer-rules';
 
 export const dynamic = 'force-dynamic';
 
 interface Notice {
   id: string;
-  type: 'approval' | 'task' | 'followup' | 'expiring' | 'viewed' | 'decision';
+  type: 'approval' | 'task' | 'followup' | 'expiring' | 'viewed' | 'decision' | 'overdue';
   title: string;
   subtitle?: string;
   href: string;
@@ -18,7 +20,7 @@ export async function GET() {
     if (!user) return unauthorized();
 
     const items: Notice[] = [];
-    const counts = { approvals: 0, tasks: 0, followUps: 0, expiring: 0, viewed: 0, decisions: 0 };
+    const counts = { approvals: 0, tasks: 0, followUps: 0, expiring: 0, viewed: 0, decisions: 0, overdue: 0 };
 
     // Oferty czekające na akceptację marży (zarząd)
     if (user.isManagement) {
@@ -93,6 +95,18 @@ export async function GET() {
         subtitle: o.client_name, href: `/dashboard/offers/${o.id}`,
       })
     );
+
+    // Oferty bez oznaczonego wyniku po terminie ważności: trzeba je rozliczyć (wygrana / przegrana / częściowo)
+    const overdue = await overdueOffers(db, user.id);
+    counts.overdue = overdue.length;
+    if (overdue.length > 0) {
+      items.unshift({
+        id: 'overdue', type: 'overdue',
+        title: `${overdue.length} ${overdue.length === 1 ? 'oferta czeka' : 'ofert czeka'} na oznaczenie wyniku`,
+        subtitle: overdue.length >= OPEN_OFFERS_LIMIT && !user.isManagement ? 'Limit przekroczony – nowe oferty zablokowane' : `Limit: ${OPEN_OFFERS_LIMIT}`,
+        href: '/dashboard/offers?overdue=1',
+      });
+    }
 
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     return NextResponse.json({ items, counts, total });

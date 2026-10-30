@@ -22,6 +22,12 @@ interface Product {
   max_discount_percent?: number | null;
   usage_count: number;
   last_sale?: number | null;
+  manufacturer?: string | null;
+  ekonom_code?: string | null;
+  in_ekonom?: boolean;
+  min_price?: number | null;
+  stock_qty?: number | null;
+  supplier_bonus_percent?: number | null;
 }
 
 const TEMPLATE_CSV = 'Nazwa;Jednostka;SKU;Kategoria;Cena zakupu;Marża %\r\nPrzewód YDY 3x1,5 mm²;m;KB-YDY-3x15;Kable i przewody;2,10;32\r\nWyłącznik nadprądowy B16;szt;AP-B16-1P;Aparatura modułowa;9,80;36\r\n';
@@ -245,8 +251,9 @@ export default function ProductsPage() {
             <thead>
               <tr className="border-b border-gray-200 text-left text-gray-600">
                 <th className="py-2 pr-3">SKU</th><th className="py-2 pr-3">Nazwa</th><th className="py-2 pr-3">Kategoria</th><th className="py-2 pr-3">J.m.</th>
-                <th className="py-2 pr-3 text-right">Cena katalogowa</th>
-                {canSeeCosts && <><th className="py-2 pr-3 text-right">Koszt</th><th className="py-2 pr-3 text-right">Marża</th><th className="py-2 pr-3 text-right">Max rabat</th></>}
+                <th className="py-2 pr-3">Producent</th><th className="py-2 pr-3">Ekonom</th><th className="py-2 pr-3 text-right">Stan</th>
+                <th className="py-2 pr-3 text-right">Cena katalogowa</th><th className="py-2 pr-3 text-right">Cena min.</th>
+                {canSeeCosts && <><th className="py-2 pr-3 text-right">Koszt</th><th className="py-2 pr-3 text-right">Bonus dost.</th><th className="py-2 pr-3 text-right">Marża</th><th className="py-2 pr-3 text-right">Max rabat</th></>}
                 <th className="py-2 pr-3 text-right">Użyć w ofertach</th><th className="py-2 text-right">Ostatnia sprzedaż</th>
               </tr>
             </thead>
@@ -257,10 +264,19 @@ export default function ProductsPage() {
                   <td className="py-2 pr-3 font-medium text-gray-900">{p.name}</td>
                   <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{p.category || '-'}</td>
                   <td className="py-2 pr-3">{p.unit}</td>
+                  <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">{p.manufacturer || '-'}</td>
+                  <td className="py-2 pr-3 whitespace-nowrap">
+                    {p.in_ekonom === false
+                      ? <span className="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">poza Ekonomem</span>
+                      : <span className="text-xs text-gray-500">{p.ekonom_code || '-'}</span>}
+                  </td>
+                  <td className="py-2 pr-3 text-right text-gray-600">{p.stock_qty != null ? (Number(p.stock_qty) >= 9999 ? '∞' : Number(p.stock_qty)) : '-'}</td>
                   <td className="py-2 pr-3 text-right font-medium">{p.base_price ? formatCurrency(p.base_price) : '-'}</td>
+                  <td className="py-2 pr-3 text-right text-red-700">{p.min_price ? formatCurrency(p.min_price) : '-'}</td>
                   {canSeeCosts && (
                     <>
                       <td className="py-2 pr-3 text-right">{p.cost_price ? formatCurrency(p.cost_price) : '-'}</td>
+                      <td className="py-2 pr-3 text-right">{p.supplier_bonus_percent ? `${Number(p.supplier_bonus_percent)}%` : '-'}</td>
                       <td className="py-2 pr-3 text-right">{p.margin_percent != null ? `${p.margin_percent.toFixed(1)}%` : '-'}</td>
                       <td className="py-2 pr-3 text-right">{p.max_discount_percent != null ? `${p.max_discount_percent}%` : '-'}</td>
                     </>
@@ -270,7 +286,7 @@ export default function ProductsPage() {
                 </tr>
               ))}
               {!loading && products.length === 0 && (
-                <tr><td colSpan={10} className="py-10 text-center text-gray-500">Brak produktów spełniających kryteria</td></tr>
+                <tr><td colSpan={14} className="py-10 text-center text-gray-500">Brak produktów spełniających kryteria</td></tr>
               )}
             </tbody>
           </table>
